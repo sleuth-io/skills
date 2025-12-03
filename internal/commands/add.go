@@ -283,95 +283,6 @@ func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repo
 	return nil
 }
 
-// promptForMetadata prompts the user to enter metadata
-func promptForMetadata(out *outputHelper, zipFile string, zipData []byte) (*metadata.Metadata, error) {
-	// List files in zip
-	files, err := utils.ListZipFiles(zipData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list zip files: %w", err)
-	}
-
-	// Prompt for name with default from zip file path
-	defaultName := guessArtifactName(zipFile)
-	name, err := out.promptWithDefault("Artifact name", defaultName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read name: %w", err)
-	}
-
-	// Prompt for version with default 1.0
-	version, err := out.promptWithDefault("Version", "1.0")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read version: %w", err)
-	}
-
-	// Auto-detect type using handlers
-	detectedMeta := handlers.DetectArtifactType(files, name, version)
-	artifactType := detectedMeta.Artifact.Type
-
-	// Prompt for type with detected default
-	typeInput, err := out.promptWithDefault("Type", artifactType)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read type: %w", err)
-	}
-	if typeInput != "" {
-		artifactType = typeInput
-	}
-
-	// If type changed, create new metadata, otherwise use detected
-	if typeInput != "" && typeInput != detectedMeta.Artifact.Type {
-		// User changed type, start fresh
-		meta := &metadata.Metadata{
-			MetadataVersion: "1.0",
-			Artifact: metadata.Artifact{
-				Name:    name,
-				Version: version,
-				Type:    artifactType,
-			},
-		}
-
-		// Create type-specific sections
-		switch artifactType {
-		case "skill":
-			meta.Skill = &metadata.SkillConfig{PromptFile: "SKILL.md"}
-		case "agent":
-			meta.Agent = &metadata.AgentConfig{PromptFile: "AGENT.md"}
-		case "command":
-			meta.Command = &metadata.CommandConfig{PromptFile: "COMMAND.md"}
-		case "hook":
-			event, err := out.prompt("Hook event (e.g., pre-commit): ")
-			if err != nil {
-				return nil, fmt.Errorf("failed to read hook event: %w", err)
-			}
-			meta.Hook = &metadata.HookConfig{
-				Event:      event,
-				ScriptFile: "hook.sh",
-			}
-		case "mcp", "mcp-remote":
-			command, err := out.prompt("Command (e.g., node): ")
-			if err != nil {
-				return nil, fmt.Errorf("failed to read command: %w", err)
-			}
-			argsInput, err := out.prompt("Args (comma-separated, e.g., dist/index.js): ")
-			if err != nil {
-				return nil, fmt.Errorf("failed to read args: %w", err)
-			}
-			args := strings.Split(argsInput, ",")
-			for i := range args {
-				args[i] = strings.TrimSpace(args[i])
-			}
-			meta.MCP = &metadata.MCPConfig{
-				Command: command,
-				Args:    args,
-			}
-		}
-
-		return meta, nil
-	}
-
-	// Type didn't change, use detected metadata
-	return detectedMeta, nil
-}
-
 // extractOrDetectNameAndType extracts name and type from metadata or auto-detects them
 func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byte) (name string, artifactType string, metadataExists bool, err error) {
 	out.println("Detecting artifact name and type...")
@@ -545,24 +456,6 @@ func addMetadataToZip(meta *metadata.Metadata, zipData []byte) ([]byte, error) {
 	}
 
 	return newZipData, nil
-}
-
-// autoDetectMetadata creates metadata by auto-detecting values from the zip
-func autoDetectMetadata(zipFile string, zipData []byte) (*metadata.Metadata, error) {
-	// List files in zip
-	files, err := utils.ListZipFiles(zipData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list zip files: %w", err)
-	}
-
-	// Auto-detect values
-	name := guessArtifactName(zipFile)
-	version := "1.0"
-
-	// Use handlers to detect type and create metadata
-	meta := handlers.DetectArtifactType(files, name, version)
-
-	return meta, nil
 }
 
 // guessArtifactName extracts a reasonable artifact name from the zip file path

@@ -134,9 +134,9 @@ func (s *SleuthRepository) AddArtifact(ctx context.Context, artifact *lockfile.A
 	}
 
 	// Add metadata fields
-	writer.WriteField("name", artifact.Name)
-	writer.WriteField("version", artifact.Version)
-	writer.WriteField("type", string(artifact.Type))
+	_ = writer.WriteField("name", artifact.Name)
+	_ = writer.WriteField("version", artifact.Version)
+	_ = writer.WriteField("type", string(artifact.Type))
 
 	// Close writer
 	if err := writer.Close(); err != nil {

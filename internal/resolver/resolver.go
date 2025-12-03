@@ -82,9 +82,7 @@ func (r *Resolver) Resolve(reqs []requirements.Requirement) (*lockfile.LockFile,
 		resolved[artifact.Name] = artifact
 
 		// Add dependencies to queue
-		for _, dep := range deps {
-			queue = append(queue, dep)
-		}
+		queue = append(queue, deps...)
 
 		delete(processing, name)
 	}

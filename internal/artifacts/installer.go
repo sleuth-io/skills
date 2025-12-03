@@ -192,10 +192,8 @@ func (f *ArtifactFetcher) FetchArtifact(ctx context.Context, artifact *lockfile.
 	}
 
 	// Cache to disk for future use
-	if err := cache.SaveArtifactToDisk(artifact.Name, artifact.Version, zipData); err != nil {
-		// Log warning but don't fail
-		// Could add logging here
-	}
+	_ = cache.SaveArtifactToDisk(artifact.Name, artifact.Version, zipData)
+	// Ignore cache save errors - not critical
 
 	return zipData, meta, nil
 }
@@ -213,7 +211,7 @@ func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifac
 				// Valid cached artifact - complete progress bar immediately
 				if bar != nil {
 					bar.ChangeMax64(int64(len(zipData)))
-					bar.Set64(int64(len(zipData)))
+					_ = bar.Set64(int64(len(zipData)))
 				}
 				return zipData, meta, nil
 			}
@@ -228,7 +226,7 @@ func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifac
 		progressCallback := func(current, total int64) {
 			if bar != nil && total > 0 {
 				bar.ChangeMax64(total)
-				bar.Set64(current)
+				_ = bar.Set64(current)
 			}
 		}
 
@@ -245,7 +243,7 @@ func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifac
 		// Update progress bar to 100% for non-HTTP sources
 		if bar != nil {
 			bar.ChangeMax64(int64(len(zipData)))
-			bar.Set64(int64(len(zipData)))
+			_ = bar.Set64(int64(len(zipData)))
 		}
 	}
 
@@ -271,10 +269,8 @@ func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifac
 	}
 
 	// Cache to disk for future use
-	if err := cache.SaveArtifactToDisk(artifact.Name, artifact.Version, zipData); err != nil {
-		// Log warning but don't fail
-		// Could add logging here
-	}
+	_ = cache.SaveArtifactToDisk(artifact.Name, artifact.Version, zipData)
+	// Ignore cache save errors - not critical
 
 	return zipData, meta, nil
 }
@@ -323,7 +319,7 @@ func (f *ArtifactFetcher) FetchArtifacts(ctx context.Context, artifacts []*lockf
 				zipData, meta, err := f.FetchArtifactWithProgress(ctx, task.Artifact, bar)
 
 				if bar != nil {
-					bar.Finish()
+					_ = bar.Finish()
 				}
 
 				resultChan <- DownloadResult{

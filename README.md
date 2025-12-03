@@ -27,10 +27,10 @@ skills install                # Install artifacts from lock file
 ## Development
 
 ```bash
+make prepush        # Run before pushing (format, lint, test, build)
+make postpull       # Run after pulling (download dependencies)
 make build          # Build binary
 make test           # Run tests
-make format         # Format code
-make lint           # Run linter
 ```
 
 ## Documentation

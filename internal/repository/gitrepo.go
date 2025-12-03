@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/sleuth-io/skills/internal/cache"
 	"github.com/sleuth-io/skills/internal/constants"
@@ -275,8 +276,10 @@ func extractZipToDir(zipData []byte, targetDir string) error {
 		targetPath := filepath.Join(targetDir, file.Name)
 
 		// Prevent zip slip vulnerability
-		if !filepath.HasPrefix(targetPath, filepath.Clean(targetDir)+string(os.PathSeparator)) &&
-			targetPath != filepath.Clean(targetDir) {
+		cleanTarget := filepath.Clean(targetPath)
+		cleanDir := filepath.Clean(targetDir)
+		relPath, err := filepath.Rel(cleanDir, cleanTarget)
+		if err != nil || strings.HasPrefix(relPath, "..") {
 			return fmt.Errorf("illegal file path: %s", file.Name)
 		}
 

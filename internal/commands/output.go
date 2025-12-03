@@ -3,7 +3,6 @@ package commands
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -61,9 +60,4 @@ func (o *outputHelper) promptWithDefault(message, defaultValue string) (string, 
 		return defaultValue, nil
 	}
 	return response, nil
-}
-
-// getOutput returns the command's output writer
-func (o *outputHelper) getOutput() io.Writer {
-	return o.cmd.OutOrStdout()
 }

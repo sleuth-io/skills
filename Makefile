@@ -68,3 +68,17 @@ tidy: ## Tidy go.mod
 verify: ## Verify dependencies
 	@echo "Verifying dependencies..."
 	@go mod verify
+
+prepush: format lint test build ## Run before pushing (format, lint, test, build)
+
+postpull: deps ## Run after pulling (download dependencies)
+	@echo "Installing development tools..."
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@if ! which golangci-lint > /dev/null 2>&1; then \
+		echo ""; \
+		echo "WARNING: golangci-lint was installed but is not in your PATH."; \
+		echo "Add this to your ~/.bashrc or ~/.zshrc:"; \
+		echo "  export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""; \
+		echo "Then run: source ~/.bashrc (or source ~/.zshrc)"; \
+		echo ""; \
+	fi

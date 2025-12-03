@@ -2,6 +2,22 @@
 
 A CLI tool for managing Sleuth skills - reusable units of AI agent behavior.
 
+## Prerequisites
+
+Go 1.22.2 or later is required. Install using [gvm](https://github.com/moovweb/gvm):
+
+```bash
+# Install gvm
+bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
+
+# Install Go (use go1.4 as bootstrap if needed)
+gvm install go1.4 -B
+gvm use go1.4
+export GOROOT_BOOTSTRAP=$GOROOT
+gvm install go1.23.4
+gvm use go1.23.4 --default
+```
+
 ## Installation
 
 ```bash
@@ -11,6 +27,7 @@ go install github.com/sleuth-io/skills/cmd/skills@latest
 Or build from source:
 
 ```bash
+make init      # First time setup (install tools, download deps)
 make build
 make install
 ```

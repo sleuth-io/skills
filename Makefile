@@ -69,11 +69,17 @@ verify: ## Verify dependencies
 	@echo "Verifying dependencies..."
 	@go mod verify
 
-prepush: format lint test build ## Run before pushing (format, lint, test, build)
+update-deps: ## Update all dependencies to latest versions
+	@echo "Updating all dependencies..."
+	@go get -u ./...
+	@go mod tidy
 
-postpull: deps ## Run after pulling (download dependencies)
+init: ## Initialize development environment (install tools, download deps)
+	@echo "Initializing development environment..."
 	@echo "Installing development tools..."
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "Downloading dependencies..."
+	@go mod download
 	@if ! which golangci-lint > /dev/null 2>&1; then \
 		echo ""; \
 		echo "WARNING: golangci-lint was installed but is not in your PATH."; \
@@ -82,3 +88,9 @@ postpull: deps ## Run after pulling (download dependencies)
 		echo "Then run: source ~/.bashrc (or source ~/.zshrc)"; \
 		echo ""; \
 	fi
+	@echo ""
+	@echo "✓ Development environment initialized"
+
+prepush: format lint test build ## Run before pushing (format, lint, test, build)
+
+postpull: deps ## Run after pulling (download dependencies)

@@ -26,6 +26,9 @@ from remote Sleuth servers or Git repositories.`,
 			return commands.RunDefaultCommand(cmd, args)
 		},
 		SilenceUsage: true,
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
+		},
 	}
 
 	// Add global flags
@@ -37,6 +40,7 @@ from remote Sleuth servers or Git repositories.`,
 	rootCmd.AddCommand(commands.NewInstallCommand())
 	rootCmd.AddCommand(commands.NewLockCommand())
 	rootCmd.AddCommand(commands.NewAddCommand())
+	rootCmd.AddCommand(commands.NewUpdateTemplatesCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

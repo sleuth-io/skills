@@ -4,6 +4,7 @@ set -e
 # Auto-generated install script for Sleuth Skills artifact repository
 # This script ensures the skills CLI is installed and configured.
 # Safe to run multiple times (idempotent).
+# Template version: {{.TEMPLATE_VERSION}}
 
 SKILLS_CONFIG="$HOME/.config/sleuth/skills/config.json"
 
@@ -38,7 +39,7 @@ echo "Configuring skills CLI for this repository..."
 echo
 
 # Use the skills artifact repository URL
-REPO_URL="{{REPO_URL}}"
+REPO_URL="{{.REPO_URL}}"
 
 echo "Using skills repository: $REPO_URL"
 echo

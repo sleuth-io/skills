@@ -9,7 +9,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/sleuth-io/skills/internal/cache"
 	"github.com/sleuth-io/skills/internal/constants"
@@ -24,6 +26,16 @@ var installScriptTemplate string
 
 //go:embed templates/README.md.tmpl
 var readmeTemplate string
+
+const (
+	// installScriptTemplateVersion is the current version of the install.sh template
+	// Increment this when making changes to the template
+	installScriptTemplateVersion = "1"
+
+	// readmeTemplateVersion is the current version of the README.md template
+	// Increment this when making changes to the template
+	readmeTemplateVersion = "1"
+)
 
 // GitRepository implements Repository for Git repositories
 type GitRepository struct {
@@ -236,57 +248,169 @@ func (g *GitRepository) pull(ctx context.Context) error {
 	return g.gitClient.Pull(ctx, g.repoPath)
 }
 
+// UpdateTemplates updates templates in the repository if needed and returns the list of updated files
+// The commit parameter controls whether to commit and push changes (git-specific behavior)
+func (g *GitRepository) UpdateTemplates(ctx context.Context, commit bool) ([]string, error) {
+	return g.updateTemplates(ctx, commit)
+}
+
 // ensureInstallScript creates an install.sh script and README.md in the repository root if they don't exist
+// or regenerates them if the template version has changed
 func (g *GitRepository) ensureInstallScript(ctx context.Context) error {
+	_, err := g.updateTemplates(ctx, false)
+	return err
+}
+
+// updateTemplates is the internal implementation that returns which files were updated
+func (g *GitRepository) updateTemplates(ctx context.Context, commit bool) ([]string, error) {
+	var updatedFiles []string
 	installScriptPath := filepath.Join(g.repoPath, "install.sh")
 	readmePath := filepath.Join(g.repoPath, "README.md")
 
-	// Check if install.sh already exists
-	installScriptExists := false
-	if _, err := os.Stat(installScriptPath); err == nil {
-		installScriptExists = true
-	} else if !os.IsNotExist(err) {
-		// Some other error checking the file
-		return fmt.Errorf("failed to check install.sh: %w", err)
+	// Use version constants directly (not from templates, which contain placeholders)
+	installScriptVersion := installScriptTemplateVersion
+	readmeVersion := readmeTemplateVersion
+
+	// Check if install.sh needs to be created or updated
+	needInstallScriptUpdate := false
+	if content, err := os.ReadFile(installScriptPath); err == nil {
+		// File exists, check if version needs update
+		fileVersion := extractTemplateVersion(string(content), "# Template version: ")
+		needInstallScriptUpdate = shouldUpdateTemplate(fileVersion, installScriptVersion)
+	} else if os.IsNotExist(err) {
+		// File doesn't exist
+		needInstallScriptUpdate = true
+	} else {
+		return nil, fmt.Errorf("failed to check install.sh: %w", err)
 	}
 
-	// Check if README.md already exists
-	readmeExists := false
-	if _, err := os.Stat(readmePath); err == nil {
-		readmeExists = true
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to check README.md: %w", err)
+	// Check if README.md needs to be created or updated
+	needReadmeUpdate := false
+	if content, err := os.ReadFile(readmePath); err == nil {
+		// File exists, check if version needs update
+		fileVersion := extractTemplateVersion(string(content), "<!-- Template version: ")
+		needReadmeUpdate = shouldUpdateTemplate(fileVersion, readmeVersion)
+	} else if os.IsNotExist(err) {
+		// File doesn't exist
+		needReadmeUpdate = true
+	} else {
+		return nil, fmt.Errorf("failed to check README.md: %w", err)
 	}
 
-	// If both exist, nothing to do
-	if installScriptExists && readmeExists {
-		return nil
+	// If both files are up to date, nothing to do
+	if !needInstallScriptUpdate && !needReadmeUpdate {
+		return updatedFiles, nil
 	}
 
-	// Create install.sh if it doesn't exist
-	if !installScriptExists {
+	// Create or update install.sh if needed
+	if needInstallScriptUpdate {
 		// Generate install.sh with actual repository URL
 		installScript := generateInstallScript(g.repoURL)
 		if err := os.WriteFile(installScriptPath, []byte(installScript), 0755); err != nil {
-			return fmt.Errorf("failed to create install.sh: %w", err)
+			return nil, fmt.Errorf("failed to create install.sh: %w", err)
 		}
+		updatedFiles = append(updatedFiles, "install.sh")
 	}
 
-	// Create README.md if it doesn't exist
-	if !readmeExists {
+	// Create or update README.md if needed
+	if needReadmeUpdate {
 		// Generate README with actual repository URL
 		readme := generateReadme(g.repoURL)
 		if err := os.WriteFile(readmePath, []byte(readme), 0644); err != nil {
-			return fmt.Errorf("failed to create README.md: %w", err)
+			return nil, fmt.Errorf("failed to create README.md: %w", err)
+		}
+		updatedFiles = append(updatedFiles, "README.md")
+	}
+
+	// Commit and push the changes if requested and any files were updated
+	if commit && len(updatedFiles) > 0 {
+		// Stage the updated files
+		if err := g.gitClient.Add(ctx, g.repoPath, updatedFiles...); err != nil {
+			return nil, fmt.Errorf("failed to stage updated templates: %w", err)
+		}
+
+		// Commit with a descriptive message
+		commitMsg := fmt.Sprintf("Update templates to version %s/%s", installScriptTemplateVersion, readmeTemplateVersion)
+		if err := g.gitClient.Commit(ctx, g.repoPath, commitMsg); err != nil {
+			return nil, fmt.Errorf("failed to commit updated templates: %w", err)
+		}
+
+		// Push to remote
+		if err := g.gitClient.Push(ctx, g.repoPath); err != nil {
+			return nil, fmt.Errorf("failed to push updated templates: %w", err)
 		}
 	}
 
-	return nil
+	return updatedFiles, nil
+}
+
+// extractTemplateVersion extracts the version number from a template or file content
+// Returns empty string if no version found
+func extractTemplateVersion(content, prefix string) string {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			// Extract version after the prefix
+			version := strings.TrimPrefix(line, prefix)
+			// Remove trailing comment markers
+			version = strings.TrimSuffix(version, "-->")
+			return strings.TrimSpace(version)
+		}
+	}
+	return ""
+}
+
+// shouldUpdateTemplate determines if a template file needs to be updated
+// Returns true if the file should be updated (fileVersion < templateVersion or fileVersion missing)
+// Returns false if fileVersion >= templateVersion (prevents downgrades)
+// Panics if templateVersion is missing (programming error)
+func shouldUpdateTemplate(fileVersion, templateVersion string) bool {
+	// Template version must always exist - if not, it's a programming error
+	if templateVersion == "" {
+		panic("template version is missing - this should never happen")
+	}
+
+	// Parse template version as integer
+	templateVer, err := strconv.Atoi(templateVersion)
+	if err != nil {
+		panic(fmt.Sprintf("template version is invalid: %s", templateVersion))
+	}
+
+	// If no version in file (empty string), treat as version 0 and update
+	if fileVersion == "" {
+		return true
+	}
+
+	// Parse file version as integer
+	fileVer, err := strconv.Atoi(fileVersion)
+	if err != nil {
+		// If file version is invalid, treat as 0 and update
+		return true
+	}
+
+	// Only update if template version is newer
+	return fileVer < templateVer
 }
 
 // generateInstallScript creates an install.sh with the actual repository URL
 func generateInstallScript(repoURL string) string {
-	return strings.ReplaceAll(installScriptTemplate, "{{REPO_URL}}", repoURL)
+	tmpl, err := template.New("install.sh").Parse(installScriptTemplate)
+	if err != nil {
+		// This should never happen with embedded templates
+		panic(fmt.Sprintf("failed to parse install.sh template: %v", err))
+	}
+
+	var buf bytes.Buffer
+	data := map[string]string{
+		"REPO_URL":         repoURL,
+		"TEMPLATE_VERSION": installScriptTemplateVersion,
+	}
+	if err := tmpl.Execute(&buf, data); err != nil {
+		panic(fmt.Sprintf("failed to execute install.sh template: %v", err))
+	}
+
+	return buf.String()
 }
 
 // generateReadme creates a README with the actual repository URL
@@ -295,7 +419,21 @@ func generateReadme(repoURL string) string {
 	// e.g., https://github.com/org/repo.git -> https://raw.githubusercontent.com/org/repo/main/install.sh
 	rawURL := convertToRawURL(repoURL)
 
-	return strings.ReplaceAll(readmeTemplate, "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/install.sh", rawURL)
+	tmpl, err := template.New("README.md").Parse(readmeTemplate)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse README.md template: %v", err))
+	}
+
+	var buf bytes.Buffer
+	data := map[string]string{
+		"INSTALL_URL":      rawURL,
+		"TEMPLATE_VERSION": readmeTemplateVersion,
+	}
+	if err := tmpl.Execute(&buf, data); err != nil {
+		panic(fmt.Sprintf("failed to execute README.md template: %v", err))
+	}
+
+	return buf.String()
 }
 
 // convertToRawURL converts a git repository URL to a raw content URL

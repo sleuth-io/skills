@@ -14,15 +14,17 @@ import (
 
 // HTTPSourceHandler handles artifacts with source-http
 type HTTPSourceHandler struct {
-	client *http.Client
+	client    *http.Client
+	authToken string
 }
 
 // NewHTTPSourceHandler creates a new HTTP source handler
-func NewHTTPSourceHandler() *HTTPSourceHandler {
+func NewHTTPSourceHandler(authToken string) *HTTPSourceHandler {
 	return &HTTPSourceHandler{
 		client: &http.Client{
 			Timeout: 5 * time.Minute,
 		},
+		authToken: authToken,
 	}
 }
 
@@ -42,6 +44,11 @@ func (h *HTTPSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifa
 
 	// Add user agent
 	req.Header.Set("User-Agent", buildinfo.GetUserAgent())
+
+	// Add authorization header if available
+	if h.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+h.authToken)
+	}
 
 	// Execute request
 	resp, err := h.client.Do(req)
@@ -104,6 +111,11 @@ func (h *HTTPSourceHandler) DownloadWithProgress(ctx context.Context, url string
 	}
 
 	req.Header.Set("User-Agent", buildinfo.GetUserAgent())
+
+	// Add authorization header if available
+	if h.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+h.authToken)
+	}
 
 	resp, err := h.client.Do(req)
 	if err != nil {

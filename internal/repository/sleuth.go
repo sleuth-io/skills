@@ -34,7 +34,7 @@ func NewSleuthRepository(serverURL, authToken string) *SleuthRepository {
 		serverURL:   serverURL,
 		authToken:   authToken,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
-		httpHandler: NewHTTPSourceHandler(),
+		httpHandler: NewHTTPSourceHandler(authToken),
 		pathHandler: NewPathSourceHandler(""), // Lock file dir not applicable for Sleuth
 		gitHandler:  NewGitSourceHandler(gitClient),
 	}
@@ -199,7 +199,7 @@ func (s *SleuthRepository) AddArtifact(ctx context.Context, artifact *lockfile.A
 
 // GetVersionList retrieves available versions for an artifact
 func (s *SleuthRepository) GetVersionList(ctx context.Context, name string) ([]string, error) {
-	endpoint := fmt.Sprintf("%s/api/skills/artifacts/%s/versions", s.serverURL, name)
+	endpoint := fmt.Sprintf("%s/api/skills/artifacts/%s/list.txt", s.serverURL, name)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
@@ -222,15 +222,14 @@ func (s *SleuthRepository) GetVersionList(ctx context.Context, name string) ([]s
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	var response struct {
-		Versions []string `json:"versions"`
+	// Read plain text response (newline-separated versions)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return response.Versions, nil
+	// Parse versions using common parser
+	return parseVersionList(body), nil
 }
 
 // GetMetadata retrieves metadata for a specific artifact version

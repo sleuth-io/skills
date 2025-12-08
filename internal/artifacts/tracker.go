@@ -32,7 +32,7 @@ type InstalledArtifact struct {
 
 // GetTrackerPath returns the path to the installed artifacts tracker
 func GetTrackerPath(targetBase string) string {
-	return filepath.Join(targetBase, ".claude", ".sleuth-installed.json")
+	return filepath.Join(targetBase, ".skills-installed.json")
 }
 
 // LoadInstalledArtifacts loads the tracker file

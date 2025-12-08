@@ -17,6 +17,9 @@ import (
 const (
 	// DefaultPollInterval is the default interval for polling the token endpoint
 	DefaultPollInterval = 5 * time.Second
+
+	// OAuthClientID is the well-known client ID for the Skills CLI
+	OAuthClientID = "sleuth-skills-claude-code"
 )
 
 // OAuthDeviceCodeResponse represents the response from the device authorization endpoint
@@ -59,7 +62,11 @@ func NewOAuthClient(serverURL string) *OAuthClient {
 func (o *OAuthClient) StartDeviceFlow(ctx context.Context) (*OAuthDeviceCodeResponse, error) {
 	endpoint := o.serverURL + "/api/oauth/device-authorization/"
 
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, nil)
+	// Prepare request body with client_id
+	data := url.Values{}
+	data.Set("client_id", OAuthClientID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -137,6 +144,7 @@ func (o *OAuthClient) requestToken(ctx context.Context, endpoint, deviceCode str
 	data := url.Values{}
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
 	data.Set("device_code", deviceCode)
+	data.Set("client_id", OAuthClientID)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(data.Encode()))
 	if err != nil {

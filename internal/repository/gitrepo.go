@@ -62,7 +62,7 @@ func NewGitRepository(repoURL string) (*GitRepository, error) {
 		repoURL:     repoURL,
 		repoPath:    repoPath,
 		gitClient:   gitClient,
-		httpHandler: NewHTTPSourceHandler(),
+		httpHandler: NewHTTPSourceHandler(""),       // No auth token for git repos
 		pathHandler: NewPathSourceHandler(repoPath), // Use repo path for relative paths
 		gitHandler:  NewGitSourceHandler(gitClient),
 	}, nil
@@ -179,16 +179,8 @@ func (g *GitRepository) GetVersionList(ctx context.Context, name string) ([]stri
 		return nil, fmt.Errorf("failed to read version list: %w", err)
 	}
 
-	// Parse versions from file
-	var versions []string
-	for _, line := range bytes.Split(data, []byte("\n")) {
-		version := string(bytes.TrimSpace(line))
-		if version != "" {
-			versions = append(versions, version)
-		}
-	}
-
-	return versions, nil
+	// Parse versions from file using common parser
+	return parseVersionList(data), nil
 }
 
 // GetArtifactByVersion retrieves an artifact by name and version from the git repository

@@ -219,32 +219,16 @@ func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifac
 		// Cache corrupted, fall through to download
 	}
 
-	// For HTTP sources, use DownloadWithProgress
-	if artifact.SourceHTTP != nil {
-		httpHandler := repository.NewHTTPSourceHandler()
+	// Download artifact through repository (handles auth properly)
+	zipData, err = f.repo.GetArtifact(ctx, artifact)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to download artifact: %w", err)
+	}
 
-		progressCallback := func(current, total int64) {
-			if bar != nil && total > 0 {
-				bar.ChangeMax64(total)
-				_ = bar.Set64(current)
-			}
-		}
-
-		zipData, err = httpHandler.DownloadWithProgress(ctx, artifact.SourceHTTP.URL, progressCallback)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to download artifact: %w", err)
-		}
-	} else {
-		// For non-HTTP sources, use regular fetch
-		zipData, err = f.repo.GetArtifact(ctx, artifact)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to download artifact: %w", err)
-		}
-		// Update progress bar to 100% for non-HTTP sources
-		if bar != nil {
-			bar.ChangeMax64(int64(len(zipData)))
-			_ = bar.Set64(int64(len(zipData)))
-		}
+	// Update progress bar to 100% after download
+	if bar != nil {
+		bar.ChangeMax64(int64(len(zipData)))
+		_ = bar.Set64(int64(len(zipData)))
 	}
 
 	// Verify it's a valid zip

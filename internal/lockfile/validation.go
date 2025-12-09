@@ -82,10 +82,6 @@ func (a *Artifact) Validate() error {
 		return fmt.Errorf("invalid semantic version %q: %w", a.Version, err)
 	}
 
-	if a.Type == "" {
-		return fmt.Errorf("type is required")
-	}
-
 	if !a.Type.IsValid() {
 		return fmt.Errorf("invalid artifact type: %s", a.Type)
 	}

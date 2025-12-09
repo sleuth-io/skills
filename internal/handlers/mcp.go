@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
@@ -46,7 +47,7 @@ func (h *MCPHandler) CreateDefaultMetadata(name, version string) *metadata.Metad
 		Artifact: metadata.Artifact{
 			Name:    name,
 			Version: version,
-			Type:    "mcp",
+			Type:    artifact.TypeMCP,
 		},
 		MCP: &metadata.MCPConfig{},
 	}
@@ -174,7 +175,7 @@ func (h *MCPHandler) Validate(zipData []byte) error {
 	}
 
 	// Verify artifact type matches
-	if meta.Artifact.Type != "mcp" {
+	if meta.Artifact.Type != artifact.TypeMCP {
 		return fmt.Errorf("artifact type mismatch: expected mcp, got %s", meta.Artifact.Type)
 	}
 
@@ -341,7 +342,7 @@ func (h *MCPHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, 
 		}
 
 		// Only include if it's actually an mcp artifact
-		if meta.Artifact.Type != "mcp" {
+		if meta.Artifact.Type != artifact.TypeMCP {
 			continue
 		}
 

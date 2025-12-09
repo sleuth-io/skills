@@ -411,7 +411,7 @@ func saveInstallationState(trackingBase string, lockFile *lockfile.LockFile, sor
 		newInstall.Artifacts = append(newInstall.Artifacts, artifacts.InstalledArtifact{
 			Name:    artifact.Name,
 			Version: artifact.Version,
-			Type:    string(artifact.Type),
+			Type:    artifact.Type,
 			// InstallPath will be populated in future enhancement
 		})
 	}

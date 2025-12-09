@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/config"
 	"github.com/sleuth-io/skills/internal/constants"
 	"github.com/sleuth-io/skills/internal/handlers"
@@ -132,17 +133,17 @@ func loadZipFile(out *outputHelper, zipFile string) (string, []byte, error) {
 }
 
 // detectArtifactInfo extracts or detects artifact name and type, then confirms with user
-func detectArtifactInfo(out *outputHelper, zipFile string, zipData []byte) (name, artifactType string, metadataExists bool, err error) {
+func detectArtifactInfo(out *outputHelper, zipFile string, zipData []byte) (name string, artifactType artifact.Type, metadataExists bool, err error) {
 	// Extract or detect name and type
 	name, artifactType, metadataExists, err = extractOrDetectNameAndType(out, zipFile, zipData)
 	if err != nil {
-		return "", "", false, err
+		return
 	}
 
 	// Confirm name and type with user
 	name, artifactType, err = confirmNameAndType(out, name, artifactType)
 	if err != nil {
-		return "", "", false, err
+		return
 	}
 
 	return name, artifactType, metadataExists, nil
@@ -176,7 +177,7 @@ func checkVersionAndContents(ctx context.Context, out *outputHelper, repo reposi
 }
 
 // handleIdenticalArtifact handles the case when content is identical to existing version
-func handleIdenticalArtifact(ctx context.Context, out *outputHelper, repo repository.Repository, name, version, artifactType string) error {
+func handleIdenticalArtifact(ctx context.Context, out *outputHelper, repo repository.Repository, name, version string, artifactType artifact.Type) error {
 	out.println()
 	out.printf("✓ Artifact %s@%s already exists in repository with identical contents\n", name, version)
 
@@ -192,17 +193,17 @@ func handleIdenticalArtifact(ctx context.Context, out *outputHelper, repo reposi
 	}
 
 	// Update the lock file with artifact
-	artifact := &lockfile.Artifact{
+	lockArtifact := &lockfile.Artifact{
 		Name:    name,
 		Version: version,
-		Type:    lockfile.ArtifactType(artifactType),
+		Type:    artifactType,
 		SourcePath: &lockfile.SourcePath{
 			Path: fmt.Sprintf("./artifacts/%s/%s", name, version),
 		},
 		Repositories: repositories,
 	}
 
-	if err := updateLockFile(ctx, out, repo, artifact); err != nil {
+	if err := updateLockFile(ctx, out, repo, lockArtifact); err != nil {
 		return fmt.Errorf("failed to update lock file: %w", err)
 	}
 
@@ -210,7 +211,7 @@ func handleIdenticalArtifact(ctx context.Context, out *outputHelper, repo reposi
 }
 
 // addNewArtifact adds a new or updated artifact to the repository
-func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repository, name, artifactType, version, zipFile string, zipData []byte, metadataExists bool) error {
+func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repository, name string, artifactType artifact.Type, version, zipFile string, zipData []byte, metadataExists bool) error {
 	// Prompt user for version
 	version, err := promptForVersion(out, version)
 	if err != nil {
@@ -227,10 +228,10 @@ func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repo
 	}
 
 	// Create artifact entry (what it is)
-	artifact := &lockfile.Artifact{
+	lockArtifact := &lockfile.Artifact{
 		Name:    meta.Artifact.Name,
 		Version: meta.Artifact.Version,
-		Type:    lockfile.ArtifactType(meta.Artifact.Type),
+		Type:    meta.Artifact.Type,
 		SourcePath: &lockfile.SourcePath{
 			Path: fmt.Sprintf("./artifacts/%s/%s", meta.Artifact.Name, meta.Artifact.Version),
 		},
@@ -239,7 +240,7 @@ func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repo
 	// Upload artifact files to repository
 	out.println()
 	out.println("Adding artifact to repository...")
-	if err := repo.AddArtifact(ctx, artifact, zipData); err != nil {
+	if err := repo.AddArtifact(ctx, lockArtifact, zipData); err != nil {
 		return fmt.Errorf("failed to add artifact: %w", err)
 	}
 
@@ -247,7 +248,7 @@ func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repo
 	out.printf("✓ Successfully added %s@%s\n", meta.Artifact.Name, meta.Artifact.Version)
 
 	// Prompt for repository configurations (how/where it's used)
-	repositories, err := promptForRepositories(out, artifact.Name, artifact.Version)
+	repositories, err := promptForRepositories(out, lockArtifact.Name, lockArtifact.Version)
 	if err != nil {
 		return fmt.Errorf("failed to configure repositories: %w", err)
 	}
@@ -258,10 +259,10 @@ func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repo
 	}
 
 	// Set repositories on artifact
-	artifact.Repositories = repositories
+	lockArtifact.Repositories = repositories
 
 	// Update lock file with artifact
-	if err := updateLockFile(ctx, out, repo, artifact); err != nil {
+	if err := updateLockFile(ctx, out, repo, lockArtifact); err != nil {
 		return fmt.Errorf("failed to update lock file: %w", err)
 	}
 
@@ -269,7 +270,7 @@ func addNewArtifact(ctx context.Context, out *outputHelper, repo repository.Repo
 }
 
 // extractOrDetectNameAndType extracts name and type from metadata or auto-detects them
-func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byte) (name string, artifactType string, metadataExists bool, err error) {
+func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byte) (name string, artifactType artifact.Type, metadataExists bool, err error) {
 	out.println("Detecting artifact name and type...")
 
 	metadataBytes, err := utils.ReadZipFile(zipData, "metadata.toml")
@@ -277,7 +278,7 @@ func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byt
 		// Metadata exists, parse it
 		meta, err := metadata.Parse(metadataBytes)
 		if err != nil {
-			return "", "", false, fmt.Errorf("failed to parse metadata: %w", err)
+			return "", artifact.Type{}, false, fmt.Errorf("failed to parse metadata: %w", err)
 		}
 		return meta.Artifact.Name, meta.Artifact.Type, true, nil
 	}
@@ -288,7 +289,7 @@ func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byt
 	// List files in zip
 	files, err := utils.ListZipFiles(zipData)
 	if err != nil {
-		return "", "", false, fmt.Errorf("failed to list zip files: %w", err)
+		return "", artifact.Type{}, false, fmt.Errorf("failed to list zip files: %w", err)
 	}
 
 	// Auto-detect values
@@ -302,41 +303,48 @@ func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byt
 }
 
 // confirmNameAndType displays name and type and asks for confirmation
-func confirmNameAndType(out *outputHelper, name, artifactType string) (string, string, error) {
+func confirmNameAndType(out *outputHelper, name string, inType artifact.Type) (outName string, outType artifact.Type, err error) {
+	outName = name
+	outType = inType
+
 	out.println()
 	out.println("Detected artifact:")
-	out.printf("  Name: %s\n", name)
-	out.printf("  Type: %s\n", artifactType)
+	out.printf("  Name: %s\n", outName)
+	out.printf("  Type: %s\n", outType)
 	out.println()
 
 	response, err := out.prompt("Is this correct? (Y/n): ")
 	if err != nil {
-		return "", "", fmt.Errorf("failed to read confirmation: %w", err)
+		err = fmt.Errorf("failed to read confirmation: %w", err)
+		return
 	}
 	response = strings.ToLower(response)
 
 	if response == "n" || response == "no" {
 		// Prompt for custom name and type
-		nameInput, err := out.promptWithDefault("Artifact name", name)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to read name: %w", err)
+		nameInput, err2 := out.promptWithDefault("Artifact name", outName)
+		if err2 != nil {
+			err = fmt.Errorf("failed to read name: %w", err2)
+			return
 		}
 		if nameInput != "" {
-			name = nameInput
+			outName = nameInput
 		}
 
-		typeInput, err := out.promptWithDefault("Artifact type", artifactType)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to read type: %w", err)
+		typeInput, err2 := out.promptWithDefault("Artifact type", outType.Label)
+		if err2 != nil {
+			err = fmt.Errorf("failed to read type: %w", err2)
+			return
 		}
 		if typeInput != "" {
-			artifactType = typeInput
+			outType = artifact.FromString(typeInput)
 		}
 	} else if response != "" && response != "y" && response != "yes" {
-		return "", "", fmt.Errorf("cancelled by user")
+		err = fmt.Errorf("cancelled by user")
+		return
 	}
 
-	return name, artifactType, nil
+	return
 }
 
 // determineSuggestedVersionAndCheckIdentical determines the version to suggest and whether contents are identical
@@ -413,7 +421,7 @@ func promptForVersion(out *outputHelper, suggestedVersion string) (string, error
 }
 
 // createMetadata creates a metadata object with the given name, version, and type
-func createMetadata(name, version, artifactType, zipFile string, zipData []byte) *metadata.Metadata {
+func createMetadata(name, version string, artifactType artifact.Type, zipFile string, zipData []byte) *metadata.Metadata {
 	// List files in zip for handler detection
 	files, _ := utils.ListZipFiles(zipData)
 

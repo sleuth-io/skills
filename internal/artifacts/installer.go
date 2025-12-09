@@ -87,7 +87,7 @@ func (i *ArtifactInstaller) Remove(ctx context.Context, artifact *lockfile.Artif
 		Artifact: metadata.Artifact{
 			Name:    artifact.Name,
 			Version: artifact.Version,
-			Type:    string(artifact.Type),
+			Type:    artifact.Type,
 		},
 	}
 
@@ -120,7 +120,7 @@ func (i *ArtifactInstaller) RemoveArtifacts(ctx context.Context, artifacts []Ins
 		lockArtifact := &lockfile.Artifact{
 			Name:    artifact.Name,
 			Version: artifact.Version,
-			Type:    lockfile.ArtifactType(artifact.Type),
+			Type:    artifact.Type,
 		}
 
 		if err := i.Remove(ctx, lockArtifact); err != nil {

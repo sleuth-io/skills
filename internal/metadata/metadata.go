@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
+	"github.com/sleuth-io/skills/internal/artifact"
 )
 
 // Metadata represents the complete metadata.toml structure
@@ -24,18 +25,18 @@ type Metadata struct {
 
 // Artifact represents the [artifact] section
 type Artifact struct {
-	Name          string   `toml:"name"`
-	Version       string   `toml:"version"`
-	Type          string   `toml:"type"`
-	Description   string   `toml:"description,omitempty"`
-	License       string   `toml:"license,omitempty"`
-	Authors       []string `toml:"authors,omitempty"`
-	Keywords      []string `toml:"keywords,omitempty"`
-	Homepage      string   `toml:"homepage,omitempty"`
-	Repository    string   `toml:"repository,omitempty"`
-	Documentation string   `toml:"documentation,omitempty"`
-	Readme        string   `toml:"readme,omitempty"`
-	Dependencies  []string `toml:"dependencies,omitempty"`
+	Name          string        `toml:"name"`
+	Version       string        `toml:"version"`
+	Type          artifact.Type `toml:"type"`
+	Description   string        `toml:"description,omitempty"`
+	License       string        `toml:"license,omitempty"`
+	Authors       []string      `toml:"authors,omitempty"`
+	Keywords      []string      `toml:"keywords,omitempty"`
+	Homepage      string        `toml:"homepage,omitempty"`
+	Repository    string        `toml:"repository,omitempty"`
+	Documentation string        `toml:"documentation,omitempty"`
+	Readme        string        `toml:"readme,omitempty"`
+	Dependencies  []string      `toml:"dependencies,omitempty"`
 }
 
 // SkillConfig represents the [skill] section
@@ -129,15 +130,15 @@ func Write(metadata *Metadata, filePath string) error {
 // GetTypeConfig returns the type-specific configuration section
 func (m *Metadata) GetTypeConfig() interface{} {
 	switch m.Artifact.Type {
-	case "skill":
+	case artifact.TypeSkill:
 		return m.Skill
-	case "command":
+	case artifact.TypeCommand:
 		return m.Command
-	case "agent":
+	case artifact.TypeAgent:
 		return m.Agent
-	case "hook":
+	case artifact.TypeHook:
 		return m.Hook
-	case "mcp", "mcp-remote":
+	case artifact.TypeMCP, artifact.TypeMCPRemote:
 		return m.MCP
 	}
 	return nil

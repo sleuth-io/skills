@@ -3,6 +3,8 @@ package lockfile
 import (
 	"fmt"
 	"time"
+
+	"github.com/sleuth-io/skills/internal/artifact"
 )
 
 // LockFile represents the complete lock file structure
@@ -15,11 +17,11 @@ type LockFile struct {
 
 // Artifact represents an artifact with its metadata, source, and installation configurations
 type Artifact struct {
-	Name         string       `toml:"name"`
-	Version      string       `toml:"version"`
-	Type         ArtifactType `toml:"type"`
-	Clients      []string     `toml:"clients,omitempty"`
-	Dependencies []Dependency `toml:"dependencies,omitempty"`
+	Name         string        `toml:"name"`
+	Version      string        `toml:"version"`
+	Type         artifact.Type `toml:"type"`
+	Clients      []string      `toml:"clients,omitempty"`
+	Dependencies []Dependency  `toml:"dependencies,omitempty"`
 
 	// Source (one of these will be present)
 	SourceHTTP *SourceHTTP `toml:"source-http,omitempty"`
@@ -75,28 +77,6 @@ func (a *Artifact) MatchesClient(clientName string) bool {
 		}
 	}
 
-	return false
-}
-
-// ArtifactType represents the type of artifact
-type ArtifactType string
-
-const (
-	ArtifactTypeMCP       ArtifactType = "mcp"
-	ArtifactTypeMCPRemote ArtifactType = "mcp-remote"
-	ArtifactTypeSkill     ArtifactType = "skill"
-	ArtifactTypeAgent     ArtifactType = "agent"
-	ArtifactTypeCommand   ArtifactType = "command"
-	ArtifactTypeHook      ArtifactType = "hook"
-)
-
-// IsValid checks if the artifact type is valid
-func (t ArtifactType) IsValid() bool {
-	switch t {
-	case ArtifactTypeMCP, ArtifactTypeMCPRemote, ArtifactTypeSkill,
-		ArtifactTypeAgent, ArtifactTypeCommand, ArtifactTypeHook:
-		return true
-	}
 	return false
 }
 

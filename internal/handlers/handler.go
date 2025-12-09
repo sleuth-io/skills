@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
@@ -69,24 +70,24 @@ type UsageDetector interface {
 type InstalledArtifactInfo struct {
 	Name        string
 	Version     string
-	Type        string
+	Type        artifact.Type
 	InstallPath string
 }
 
 // NewHandler creates an appropriate handler for the given artifact type
 func NewHandler(meta *metadata.Metadata) (ArtifactHandler, error) {
 	switch meta.Artifact.Type {
-	case "skill":
+	case artifact.TypeSkill:
 		return NewSkillHandler(meta), nil
-	case "agent":
+	case artifact.TypeAgent:
 		return NewAgentHandler(meta), nil
-	case "command":
+	case artifact.TypeCommand:
 		return NewCommandHandler(meta), nil
-	case "hook":
+	case artifact.TypeHook:
 		return NewHookHandler(meta), nil
-	case "mcp":
+	case artifact.TypeMCP:
 		return NewMCPHandler(meta), nil
-	case "mcp-remote":
+	case artifact.TypeMCPRemote:
 		return NewMCPRemoteHandler(meta), nil
 	default:
 		return nil, fmt.Errorf("unsupported artifact type: %s", meta.Artifact.Type)

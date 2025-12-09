@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/cache"
 	"github.com/sleuth-io/skills/internal/lockfile"
 	"github.com/sleuth-io/skills/internal/utils"
@@ -25,10 +26,10 @@ type InstalledArtifacts struct {
 
 // InstalledArtifact represents a single installed artifact
 type InstalledArtifact struct {
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Type        string `json:"type"`
-	InstallPath string `json:"installPath"`
+	Name        string        `json:"name"`
+	Version     string        `json:"version"`
+	Type        artifact.Type `json:"type"`
+	InstallPath string        `json:"installPath"`
 }
 
 // GetTrackerPath returns the path to the installed artifacts tracker

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
@@ -44,7 +45,7 @@ func (h *SkillHandler) CreateDefaultMetadata(name, version string) *metadata.Met
 		Artifact: metadata.Artifact{
 			Name:    name,
 			Version: version,
-			Type:    "skill",
+			Type:    artifact.TypeSkill,
 		},
 		Skill: &metadata.SkillConfig{
 			PromptFile: "SKILL.md",
@@ -166,7 +167,7 @@ func (h *SkillHandler) Validate(zipData []byte) error {
 	}
 
 	// Verify artifact type matches
-	if meta.Artifact.Type != "skill" {
+	if meta.Artifact.Type != artifact.TypeSkill {
 		return fmt.Errorf("artifact type mismatch: expected skill, got %s", meta.Artifact.Type)
 	}
 
@@ -213,7 +214,7 @@ func (h *SkillHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo
 		}
 
 		// Only include if it's actually a skill (not agent which also uses skills/ dir)
-		if meta.Artifact.Type != "skill" {
+		if meta.Artifact.Type != artifact.TypeSkill {
 			continue
 		}
 

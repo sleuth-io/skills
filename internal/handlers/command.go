@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
@@ -45,7 +46,7 @@ func (h *CommandHandler) CreateDefaultMetadata(name, version string) *metadata.M
 		Artifact: metadata.Artifact{
 			Name:    name,
 			Version: version,
-			Type:    "command",
+			Type:    artifact.TypeCommand,
 		},
 		Command: &metadata.CommandConfig{
 			PromptFile: "COMMAND.md",
@@ -182,7 +183,7 @@ func (h *CommandHandler) Validate(zipData []byte) error {
 	}
 
 	// Verify artifact type matches
-	if meta.Artifact.Type != "command" {
+	if meta.Artifact.Type != artifact.TypeCommand {
 		return fmt.Errorf("artifact type mismatch: expected command, got %s", meta.Artifact.Type)
 	}
 
@@ -260,7 +261,7 @@ func (h *CommandHandler) ScanInstalled(targetBase string) ([]InstalledArtifactIn
 			continue // Skip if can't parse
 		}
 
-		if meta.Artifact.Type != "command" {
+		if meta.Artifact.Type != artifact.TypeCommand {
 			continue
 		}
 

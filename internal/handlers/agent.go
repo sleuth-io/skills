@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
@@ -44,7 +45,7 @@ func (h *AgentHandler) CreateDefaultMetadata(name, version string) *metadata.Met
 		Artifact: metadata.Artifact{
 			Name:    name,
 			Version: version,
-			Type:    "agent",
+			Type:    artifact.TypeAgent,
 		},
 		Agent: &metadata.AgentConfig{
 			PromptFile: "AGENT.md",
@@ -166,7 +167,7 @@ func (h *AgentHandler) Validate(zipData []byte) error {
 	}
 
 	// Verify artifact type matches
-	if meta.Artifact.Type != "agent" {
+	if meta.Artifact.Type != artifact.TypeAgent {
 		return fmt.Errorf("artifact type mismatch: expected agent, got %s", meta.Artifact.Type)
 	}
 
@@ -213,7 +214,7 @@ func (h *AgentHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo
 		}
 
 		// Only include if it's actually an agent
-		if meta.Artifact.Type != "agent" {
+		if meta.Artifact.Type != artifact.TypeAgent {
 			continue
 		}
 

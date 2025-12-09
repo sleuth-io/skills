@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
@@ -45,7 +46,7 @@ func (h *HookHandler) CreateDefaultMetadata(name, version string) *metadata.Meta
 		Artifact: metadata.Artifact{
 			Name:    name,
 			Version: version,
-			Type:    "hook",
+			Type:    artifact.TypeHook,
 		},
 		Hook: &metadata.HookConfig{
 			Event:      "pre-commit",
@@ -176,7 +177,7 @@ func (h *HookHandler) Validate(zipData []byte) error {
 	}
 
 	// Verify artifact type matches
-	if meta.Artifact.Type != "hook" {
+	if meta.Artifact.Type != artifact.TypeHook {
 		return fmt.Errorf("artifact type mismatch: expected hook, got %s", meta.Artifact.Type)
 	}
 
@@ -374,7 +375,7 @@ func (h *HookHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo,
 		}
 
 		// Only include if it's actually a hook
-		if meta.Artifact.Type != "hook" {
+		if meta.Artifact.Type != artifact.TypeHook {
 			continue
 		}
 

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/buildinfo"
 	"github.com/sleuth-io/skills/internal/git"
 	"github.com/sleuth-io/skills/internal/lockfile"
@@ -163,7 +164,7 @@ func (r *Resolver) resolveRegistry(req requirements.Requirement) (*lockfile.Arti
 	artifact := &lockfile.Artifact{
 		Name:    req.Name,
 		Version: selectedVersion,
-		Type:    lockfile.ArtifactType(meta.Artifact.Type),
+		Type:    meta.Artifact.Type,
 		SourceHTTP: &lockfile.SourceHTTP{
 			URL: r.buildArtifactURL(req.Name, selectedVersion),
 			// Hashes will be computed during download in actual implementation
@@ -198,7 +199,7 @@ func (r *Resolver) resolveGit(req requirements.Requirement) (*lockfile.Artifact,
 	artifact := &lockfile.Artifact{
 		Name:    req.GitName,
 		Version: "0.0.0+git" + commitSHA[:7],
-		Type:    lockfile.ArtifactTypeSkill, // Default, should be read from metadata
+		Type:    artifact.TypeSkill, // Default, should be read from metadata
 		SourceGit: &lockfile.SourceGit{
 			URL:          req.GitURL,
 			Ref:          commitSHA,
@@ -232,7 +233,7 @@ func (r *Resolver) resolvePath(req requirements.Requirement) (*lockfile.Artifact
 	artifact := &lockfile.Artifact{
 		Name:    filepath.Base(path),
 		Version: "0.0.0+local",
-		Type:    lockfile.ArtifactTypeSkill,
+		Type:    artifact.TypeSkill,
 		SourcePath: &lockfile.SourcePath{
 			Path: req.Path, // Use original path, not expanded
 		},
@@ -271,7 +272,7 @@ func (r *Resolver) resolveHTTP(req requirements.Requirement) (*lockfile.Artifact
 	artifact := &lockfile.Artifact{
 		Name:    name,
 		Version: "0.0.0+http",
-		Type:    lockfile.ArtifactTypeSkill,
+		Type:    artifact.TypeSkill,
 		SourceHTTP: &lockfile.SourceHTTP{
 			URL: req.URL,
 			Hashes: map[string]string{

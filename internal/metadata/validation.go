@@ -5,21 +5,12 @@ import (
 	"regexp"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/sleuth-io/skills/internal/artifact"
 )
 
 var (
 	// nameRegex matches valid artifact names (alphanumeric, dashes, underscores)
 	nameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
-
-	// Valid artifact types
-	validTypes = map[string]bool{
-		"skill":      true,
-		"command":    true,
-		"agent":      true,
-		"hook":       true,
-		"mcp":        true,
-		"mcp-remote": true,
-	}
 
 	// Valid hook events
 	validHookEvents = map[string]bool{
@@ -41,7 +32,7 @@ func (m *Metadata) Validate() error {
 
 	// Validate type-specific configuration
 	switch m.Artifact.Type {
-	case "skill":
+	case artifact.TypeSkill:
 		if m.Skill == nil {
 			return fmt.Errorf("[skill] section is required for skill artifacts")
 		}
@@ -49,7 +40,7 @@ func (m *Metadata) Validate() error {
 			return fmt.Errorf("skill: %w", err)
 		}
 
-	case "command":
+	case artifact.TypeCommand:
 		if m.Command == nil {
 			return fmt.Errorf("[command] section is required for command artifacts")
 		}
@@ -57,7 +48,7 @@ func (m *Metadata) Validate() error {
 			return fmt.Errorf("command: %w", err)
 		}
 
-	case "agent":
+	case artifact.TypeAgent:
 		if m.Agent == nil {
 			return fmt.Errorf("[agent] section is required for agent artifacts")
 		}
@@ -65,7 +56,7 @@ func (m *Metadata) Validate() error {
 			return fmt.Errorf("agent: %w", err)
 		}
 
-	case "hook":
+	case artifact.TypeHook:
 		if m.Hook == nil {
 			return fmt.Errorf("[hook] section is required for hook artifacts")
 		}
@@ -73,7 +64,7 @@ func (m *Metadata) Validate() error {
 			return fmt.Errorf("hook: %w", err)
 		}
 
-	case "mcp", "mcp-remote":
+	case artifact.TypeMCP, artifact.TypeMCPRemote:
 		if m.MCP == nil {
 			return fmt.Errorf("[mcp] section is required for %s artifacts", m.Artifact.Type)
 		}
@@ -105,11 +96,7 @@ func (a *Artifact) Validate() error {
 		return fmt.Errorf("invalid semantic version %q: %w", a.Version, err)
 	}
 
-	if a.Type == "" {
-		return fmt.Errorf("type is required")
-	}
-
-	if !validTypes[a.Type] {
+	if !a.Type.IsValid() {
 		return fmt.Errorf("invalid artifact type: %s (must be one of: skill, command, agent, hook, mcp, mcp-remote)", a.Type)
 	}
 

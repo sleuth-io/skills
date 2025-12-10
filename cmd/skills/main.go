@@ -9,6 +9,7 @@ import (
 	"github.com/sleuth-io/skills/internal/buildinfo"
 	"github.com/sleuth-io/skills/internal/clients"
 	"github.com/sleuth-io/skills/internal/clients/claude_code"
+	// "github.com/sleuth-io/skills/internal/clients/cursor" // TODO: Uncomment after thorough testing
 	"github.com/sleuth-io/skills/internal/commands"
 	"github.com/sleuth-io/skills/internal/git"
 	"github.com/sleuth-io/skills/internal/logger"
@@ -18,6 +19,7 @@ import (
 func init() {
 	// Register all clients
 	clients.Register(claude_code.NewClient())
+	// clients.Register(cursor.NewClient()) // TODO: Uncomment after thorough testing
 }
 
 func main() {

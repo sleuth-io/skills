@@ -8,11 +8,13 @@ import (
 
 	"github.com/sleuth-io/skills/internal/clients"
 	"github.com/sleuth-io/skills/internal/clients/claude_code"
+	"github.com/sleuth-io/skills/internal/clients/cursor"
 )
 
 func init() {
 	// Register clients for tests
 	clients.Register(claude_code.NewClient())
+	clients.Register(cursor.NewClient())
 }
 
 // TestPathRepositoryIntegration tests the full workflow with a path repository

@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/artifacts/detectors"
 	"github.com/sleuth-io/skills/internal/config"
 	"github.com/sleuth-io/skills/internal/constants"
-	"github.com/sleuth-io/skills/internal/handlers"
 	"github.com/sleuth-io/skills/internal/lockfile"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/repository"
@@ -296,7 +296,7 @@ func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byt
 	name = guessArtifactName(zipFile)
 
 	// Use handlers to detect type
-	detectedMeta := handlers.DetectArtifactType(files, name, "")
+	detectedMeta := detectors.DetectArtifactType(files, name, "")
 	artifactType = detectedMeta.Artifact.Type
 
 	return name, artifactType, false, nil
@@ -426,7 +426,7 @@ func createMetadata(name, version string, artifactType artifact.Type, zipFile st
 	files, _ := utils.ListZipFiles(zipData)
 
 	// Use handlers to create metadata with type-specific config
-	meta := handlers.DetectArtifactType(files, name, version)
+	meta := detectors.DetectArtifactType(files, name, version)
 
 	// Override with our confirmed values
 	meta.Artifact.Name = name

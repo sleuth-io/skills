@@ -97,3 +97,10 @@ func AllTypes() []Type {
 		TypeHook,
 	}
 }
+
+// Artifact represents a simple artifact with just name, version, and type
+type Artifact struct {
+	Name    string
+	Version string
+	Type    Type
+}

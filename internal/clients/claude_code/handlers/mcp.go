@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/sleuth-io/skills/internal/handlers"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -318,8 +317,8 @@ func (h *MCPHandler) CanDetectInstalledState() bool {
 }
 
 // ScanInstalled scans for installed MCP server artifacts in the target directory
-func (h *MCPHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArtifactInfo, error) {
-	var artifacts []handlers.InstalledArtifactInfo
+func (h *MCPHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
+	var artifacts []InstalledArtifactInfo
 
 	mcpPath := filepath.Join(targetBase, "mcp-servers")
 	if !utils.IsDirectory(mcpPath) {
@@ -347,7 +346,7 @@ func (h *MCPHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArtif
 			continue
 		}
 
-		artifacts = append(artifacts, handlers.InstalledArtifactInfo{
+		artifacts = append(artifacts, InstalledArtifactInfo{
 			Name:        meta.Artifact.Name,
 			Version:     meta.Artifact.Version,
 			Type:        meta.Artifact.Type,

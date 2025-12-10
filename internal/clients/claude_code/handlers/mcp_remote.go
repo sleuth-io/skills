@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/sleuth-io/skills/internal/handlers"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -221,7 +220,7 @@ func (h *MCPRemoteHandler) CanDetectInstalledState() bool {
 }
 
 // ScanInstalled returns empty since mcp-remote cannot be detected from filesystem
-func (h *MCPRemoteHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArtifactInfo, error) {
+func (h *MCPRemoteHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
 	return nil, nil
 }
 

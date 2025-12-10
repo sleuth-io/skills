@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/sleuth-io/skills/internal/handlers"
 	"context"
 	"fmt"
 	"os"
@@ -190,8 +189,8 @@ func (h *AgentHandler) CanDetectInstalledState() bool {
 }
 
 // ScanInstalled scans for installed agent artifacts in the target directory
-func (h *AgentHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArtifactInfo, error) {
-	var artifacts []handlers.InstalledArtifactInfo
+func (h *AgentHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
+	var artifacts []InstalledArtifactInfo
 
 	agentsPath := filepath.Join(targetBase, "agents")
 	if !utils.IsDirectory(agentsPath) {
@@ -219,7 +218,7 @@ func (h *AgentHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArt
 			continue
 		}
 
-		artifacts = append(artifacts, handlers.InstalledArtifactInfo{
+		artifacts = append(artifacts, InstalledArtifactInfo{
 			Name:        meta.Artifact.Name,
 			Version:     meta.Artifact.Version,
 			Type:        meta.Artifact.Type,

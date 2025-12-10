@@ -10,6 +10,7 @@ import (
 	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/clients"
 	"github.com/sleuth-io/skills/internal/clients/claude_code/handlers"
+	"github.com/sleuth-io/skills/internal/metadata"
 )
 
 // Client implements the clients.Client interface for Claude Code
@@ -28,53 +29,16 @@ func NewClient() *Client {
 	}
 }
 
-// IsInstalled checks if Claude Code is installed
+// IsInstalled checks if Claude Code is installed by checking for .claude directory
 func (c *Client) IsInstalled() bool {
-	// Check multiple indicators
-	if c.checkBinaryInPath() {
-		return true
-	}
-	if c.checkConfigDirExists() {
-		return true
-	}
-	if c.checkVSCodeExtension() {
-		return true
-	}
-	return false
-}
-
-func (c *Client) checkBinaryInPath() bool {
-	_, err := exec.LookPath("claude")
-	return err == nil
-}
-
-func (c *Client) checkConfigDirExists() bool {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return false
 	}
 
 	configDir := filepath.Join(home, ".claude")
-	_, err = os.Stat(configDir)
-	return err == nil
-}
-
-func (c *Client) checkVSCodeExtension() bool {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-
-	extPaths := []string{
-		filepath.Join(home, ".vscode/extensions"),
-		filepath.Join(home, ".vscode-server/extensions"),
-	}
-
-	for _, extPath := range extPaths {
-		matches, _ := filepath.Glob(filepath.Join(extPath, "anthropic-ai.claude-code-*"))
-		if len(matches) > 0 {
-			return true
-		}
+	if stat, err := os.Stat(configDir); err == nil {
+		return stat.IsDir()
 	}
 	return false
 }
@@ -112,17 +76,23 @@ func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallReques
 		var err error
 		switch bundle.Metadata.Artifact.Type {
 		case artifact.TypeSkill:
-			err = handlers.InstallSkill(ctx, bundle.ZipData, bundle.Metadata, targetBase)
+			handler := handlers.NewSkillHandler(bundle.Metadata)
+			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		case artifact.TypeAgent:
-			err = handlers.InstallAgent(ctx, bundle.ZipData, bundle.Metadata, targetBase)
+			handler := handlers.NewAgentHandler(bundle.Metadata)
+			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		case artifact.TypeCommand:
-			err = handlers.InstallCommand(ctx, bundle.ZipData, bundle.Metadata, targetBase)
+			handler := handlers.NewCommandHandler(bundle.Metadata)
+			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		case artifact.TypeHook:
-			err = handlers.InstallHook(ctx, bundle.ZipData, bundle.Metadata, targetBase)
+			handler := handlers.NewHookHandler(bundle.Metadata)
+			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		case artifact.TypeMCP:
-			err = handlers.InstallMCP(ctx, bundle.ZipData, bundle.Metadata, targetBase)
+			handler := handlers.NewMCPHandler(bundle.Metadata)
+			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		case artifact.TypeMCPRemote:
-			err = handlers.InstallMCPRemote(ctx, bundle.ZipData, bundle.Metadata, targetBase)
+			handler := handlers.NewMCPRemoteHandler(bundle.Metadata)
+			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		default:
 			err = fmt.Errorf("unsupported artifact type: %s", bundle.Metadata.Artifact.Type.Key)
 		}
@@ -155,20 +125,34 @@ func (c *Client) UninstallArtifacts(ctx context.Context, req clients.UninstallRe
 			ArtifactName: art.Name,
 		}
 
+		// Create minimal metadata for removal
+		meta := &metadata.Metadata{
+			Artifact: metadata.Artifact{
+				Name: art.Name,
+				Type: art.Type,
+			},
+		}
+
 		var err error
 		switch art.Type {
 		case artifact.TypeSkill:
-			err = handlers.UninstallSkill(ctx, art.Name, targetBase)
+			handler := handlers.NewSkillHandler(meta)
+			err = handler.Remove(ctx, targetBase)
 		case artifact.TypeAgent:
-			err = handlers.UninstallAgent(ctx, art.Name, targetBase)
+			handler := handlers.NewAgentHandler(meta)
+			err = handler.Remove(ctx, targetBase)
 		case artifact.TypeCommand:
-			err = handlers.UninstallCommand(ctx, art.Name, targetBase)
+			handler := handlers.NewCommandHandler(meta)
+			err = handler.Remove(ctx, targetBase)
 		case artifact.TypeHook:
-			err = handlers.UninstallHook(ctx, art.Name, targetBase)
+			handler := handlers.NewHookHandler(meta)
+			err = handler.Remove(ctx, targetBase)
 		case artifact.TypeMCP:
-			err = handlers.UninstallMCP(ctx, art.Name, targetBase)
+			handler := handlers.NewMCPHandler(meta)
+			err = handler.Remove(ctx, targetBase)
 		case artifact.TypeMCPRemote:
-			err = handlers.UninstallMCPRemote(ctx, art.Name, targetBase)
+			handler := handlers.NewMCPRemoteHandler(meta)
+			err = handler.Remove(ctx, targetBase)
 		default:
 			err = fmt.Errorf("unsupported artifact type: %s", art.Type.Key)
 		}
@@ -202,4 +186,3 @@ func (c *Client) determineTargetBase(scope *clients.InstallScope) string {
 		return filepath.Join(home, ".claude")
 	}
 }
-

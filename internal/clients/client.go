@@ -73,7 +73,7 @@ type InstallResponse struct {
 
 // UninstallRequest contains artifacts to uninstall
 type UninstallRequest struct {
-	Artifacts []*lockfile.Artifact
+	Artifacts []artifact.Artifact
 	Scope     *InstallScope
 	Options   UninstallOptions
 }

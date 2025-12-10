@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/sleuth-io/skills/internal/artifact"
-	"github.com/sleuth-io/skills/internal/handlers"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
@@ -190,8 +189,8 @@ func (h *SkillHandler) CanDetectInstalledState() bool {
 }
 
 // ScanInstalled scans for installed skill artifacts in the target directory
-func (h *SkillHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArtifactInfo, error) {
-	var artifacts []handlers.InstalledArtifactInfo
+func (h *SkillHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
+	var artifacts []InstalledArtifactInfo
 
 	skillsPath := filepath.Join(targetBase, "skills")
 	if !utils.IsDirectory(skillsPath) {
@@ -219,7 +218,7 @@ func (h *SkillHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArt
 			continue
 		}
 
-		artifacts = append(artifacts, handlers.InstalledArtifactInfo{
+		artifacts = append(artifacts, InstalledArtifactInfo{
 			Name:        meta.Artifact.Name,
 			Version:     meta.Artifact.Version,
 			Type:        meta.Artifact.Type,

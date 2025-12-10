@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/sleuth-io/skills/internal/handlers"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -351,8 +350,8 @@ func (h *HookHandler) CanDetectInstalledState() bool {
 }
 
 // ScanInstalled scans for installed hook artifacts in the target directory
-func (h *HookHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArtifactInfo, error) {
-	var artifacts []handlers.InstalledArtifactInfo
+func (h *HookHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
+	var artifacts []InstalledArtifactInfo
 
 	hooksPath := filepath.Join(targetBase, "hooks")
 	if !utils.IsDirectory(hooksPath) {
@@ -380,7 +379,7 @@ func (h *HookHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArti
 			continue
 		}
 
-		artifacts = append(artifacts, handlers.InstalledArtifactInfo{
+		artifacts = append(artifacts, InstalledArtifactInfo{
 			Name:        meta.Artifact.Name,
 			Version:     meta.Artifact.Version,
 			Type:        meta.Artifact.Type,

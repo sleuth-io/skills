@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/sleuth-io/skills/internal/handlers"
 	"context"
 	"fmt"
 	"os"
@@ -231,8 +230,8 @@ func (h *CommandHandler) CanDetectInstalledState() bool {
 }
 
 // ScanInstalled scans for installed command artifacts by looking for -metadata.toml files
-func (h *CommandHandler) ScanInstalled(targetBase string) ([]handlers.InstalledArtifactInfo, error) {
-	var artifacts []handlers.InstalledArtifactInfo
+func (h *CommandHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
+	var artifacts []InstalledArtifactInfo
 
 	commandsPath := filepath.Join(targetBase, "commands")
 	if !utils.IsDirectory(commandsPath) {
@@ -266,7 +265,7 @@ func (h *CommandHandler) ScanInstalled(targetBase string) ([]handlers.InstalledA
 			continue
 		}
 
-		artifacts = append(artifacts, handlers.InstalledArtifactInfo{
+		artifacts = append(artifacts, InstalledArtifactInfo{
 			Name:        meta.Artifact.Name,
 			Version:     meta.Artifact.Version,
 			Type:        meta.Artifact.Type,

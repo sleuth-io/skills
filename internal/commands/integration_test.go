@@ -5,7 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sleuth-io/skills/internal/clients"
+	"github.com/sleuth-io/skills/internal/clients/claude_code"
 )
+
+func init() {
+	// Register clients for tests
+	clients.Register(claude_code.NewClient())
+}
 
 // TestPathRepositoryIntegration tests the full workflow with a path repository
 func TestPathRepositoryIntegration(t *testing.T) {
@@ -16,11 +24,24 @@ func TestPathRepositoryIntegration(t *testing.T) {
 	repoDir := filepath.Join(workingDir, "repo")
 	skillDir := filepath.Join(workingDir, "skill")
 
+	// Set environment for complete sandboxing FIRST
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, ".config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(homeDir, ".cache"))
+	claudeDir := filepath.Join(homeDir, ".claude")
+
 	// Create home and working directories (but NOT repo - let init create it)
-	for _, dir := range []string{homeDir, workingDir, skillDir} {
+	// Also create .claude directory so Claude Code client is detected
+	for _, dir := range []string{homeDir, workingDir, skillDir, claudeDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("Failed to create directory %s: %v", dir, err)
 		}
+	}
+
+	// Create a dummy settings.json to make it look like a real Claude installation
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("Failed to create settings.json: %v", err)
 	}
 
 	// Change to working directory
@@ -31,12 +52,6 @@ func TestPathRepositoryIntegration(t *testing.T) {
 	defer func() {
 		_ = os.Chdir(originalDir)
 	}()
-
-	// Set environment for complete sandboxing
-	t.Setenv("HOME", homeDir)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, ".config"))
-	t.Setenv("XDG_CACHE_HOME", filepath.Join(homeDir, ".cache"))
-	t.Setenv("CLAUDE_DIR", filepath.Join(homeDir, ".claude"))
 
 	// Create a test skill with metadata
 	skillMetadata := `[artifact]
@@ -127,7 +142,7 @@ prompt-file = "SKILL.md"
 	t.Log("Step 4: Verify installation")
 
 	// Check that skill was installed to ~/.claude/skills/test-skill
-	claudeDir := filepath.Join(homeDir, ".claude")
+	// claudeDir already declared above
 	installedSkillDir := filepath.Join(claudeDir, "skills", "test-skill")
 	if _, err := os.Stat(installedSkillDir); os.IsNotExist(err) {
 		t.Fatalf("Skill was not installed to: %s", installedSkillDir)

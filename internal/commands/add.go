@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/artifacts/detectors"
 	"github.com/sleuth-io/skills/internal/config"
 	"github.com/sleuth-io/skills/internal/constants"
-	"github.com/sleuth-io/skills/internal/handlers"
 	"github.com/sleuth-io/skills/internal/lockfile"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/repository"
@@ -296,7 +296,7 @@ func extractOrDetectNameAndType(out *outputHelper, zipFile string, zipData []byt
 	name = guessArtifactName(zipFile)
 
 	// Use handlers to detect type
-	detectedMeta := handlers.DetectArtifactType(files, name, "")
+	detectedMeta := detectors.DetectArtifactType(files, name, "")
 	artifactType = detectedMeta.Artifact.Type
 
 	return name, artifactType, false, nil
@@ -422,11 +422,21 @@ func promptForVersion(out *outputHelper, suggestedVersion string) (string, error
 
 // createMetadata creates a metadata object with the given name, version, and type
 func createMetadata(name, version string, artifactType artifact.Type, zipFile string, zipData []byte) *metadata.Metadata {
-	// List files in zip for handler detection
-	files, _ := utils.ListZipFiles(zipData)
+	// Try to read existing metadata from zip first
+	if metadataBytes, err := utils.ReadZipFile(zipData, "metadata.toml"); err == nil {
+		if existingMeta, err := metadata.Parse(metadataBytes); err == nil {
+			// Use existing metadata, just update name/version/type
+			existingMeta.Artifact.Name = name
+			existingMeta.Artifact.Version = version
+			existingMeta.Artifact.Type = artifactType
+			return existingMeta
+		}
+		// If parse fails, fall through to create new metadata
+	}
 
-	// Use handlers to create metadata with type-specific config
-	meta := handlers.DetectArtifactType(files, name, version)
+	// No existing metadata or failed to parse - create new metadata using detection
+	files, _ := utils.ListZipFiles(zipData)
+	meta := detectors.DetectArtifactType(files, name, version)
 
 	// Override with our confirmed values
 	meta.Artifact.Name = name

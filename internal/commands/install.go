@@ -10,8 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sleuth-io/skills/internal/artifact"
 	"github.com/sleuth-io/skills/internal/artifacts"
 	"github.com/sleuth-io/skills/internal/cache"
+	"github.com/sleuth-io/skills/internal/clients"
 	"github.com/sleuth-io/skills/internal/config"
 	"github.com/sleuth-io/skills/internal/constants"
 	"github.com/sleuth-io/skills/internal/gitutil"
@@ -146,12 +148,38 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool) error {
 
 	matcherScope := scope.NewMatcher(currentScope)
 
+	// Detect installed clients
+	registry := clients.Global()
+	targetClients := registry.DetectInstalled()
+	if len(targetClients) == 0 {
+		return fmt.Errorf("no AI coding clients detected")
+	}
+
+	// Display detected clients
+	clientNames := make([]string, len(targetClients))
+	for i, client := range targetClients {
+		clientNames[i] = client.DisplayName()
+	}
+	out.printf("Detected clients: %s\n", strings.Join(clientNames, ", "))
+	out.println()
+
 	// Filter artifacts by client compatibility and scope
-	clientName := "claude-code"
 	var applicableArtifacts []*lockfile.Artifact
 	for i := range lockFile.Artifacts {
 		artifact := &lockFile.Artifacts[i]
-		if artifact.MatchesClient(clientName) && matcherScope.MatchesArtifact(artifact) {
+
+		// Check if ANY target client supports this artifact AND matches scope
+		supported := false
+		for _, client := range targetClients {
+			if artifact.MatchesClient(client.ID()) &&
+				client.SupportsArtifactType(artifact.Type) &&
+				matcherScope.MatchesArtifact(artifact) {
+				supported = true
+				break
+			}
+		}
+
+		if supported {
 			applicableArtifacts = append(applicableArtifacts, artifact)
 		}
 	}
@@ -189,21 +217,30 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool) error {
 	// Load previous installation state
 	previousInstall := loadPreviousInstallState(trackingBase, out)
 
-	// Determine which artifacts need to be installed (new or changed versions)
-	artifactsToInstall := determineArtifactsToInstall(previousInstall, sortedArtifacts, out)
+	// Determine which artifacts need to be installed (new or changed versions or missing from clients)
+	targetClientIDs := make([]string, len(targetClients))
+	for i, client := range targetClients {
+		targetClientIDs[i] = client.ID()
+	}
+	artifactsToInstall := determineArtifactsToInstall(previousInstall, sortedArtifacts, targetClientIDs, out)
 
 	// Clean up artifacts that were removed from lock file
-	cleanupRemovedArtifacts(ctx, previousInstall, sortedArtifacts, trackingBase, repo, out)
+	cleanupRemovedArtifacts(ctx, previousInstall, sortedArtifacts, gitContext, currentScope, targetClients, out)
 
 	// Early exit if nothing to install
 	if len(artifactsToInstall) == 0 {
 		// Save state even if nothing changed (updates timestamp)
-		saveInstallationState(trackingBase, lockFile, sortedArtifacts, out)
+		saveInstallationState(trackingBase, lockFile, sortedArtifacts, targetClientIDs, out)
 
 		// Install Claude Code hooks even if no artifacts changed
 		if err := installClaudeCodeHooks(claudeDir, out); err != nil {
 			out.printfErr("\nWarning: failed to install hooks: %v\n", err)
 		}
+
+		// Ensure skills support is configured for all clients (creates local rules files, etc.)
+		// This is important even when no new artifacts are installed, as the local rules file
+		// may not exist yet (e.g., running in a new repo with only global skills)
+		ensureSkillsSupport(ctx, targetClients, buildInstallScope(currentScope, gitContext), out)
 
 		// In hook mode, output JSON even when nothing changed
 		if hookMode {
@@ -263,10 +300,13 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool) error {
 	}
 
 	// Install artifacts to their appropriate locations
-	installResult := installArtifacts(ctx, successfulDownloads, gitContext, currentScope, claudeDir, repo, out)
+	installResult := installArtifacts(ctx, successfulDownloads, gitContext, currentScope, targetClients, out)
 
 	// Save new installation state (saves ALL artifacts from lock file, not just changed ones)
-	saveInstallationState(trackingBase, lockFile, sortedArtifacts, out)
+	saveInstallationState(trackingBase, lockFile, sortedArtifacts, targetClientIDs, out)
+
+	// Ensure skills support is configured for all clients (creates local rules files, etc.)
+	ensureSkillsSupport(ctx, targetClients, buildInstallScope(currentScope, gitContext), out)
 
 	// Report results
 	out.println()
@@ -380,9 +420,9 @@ func loadPreviousInstallState(trackingBase string, out *outputHelper) *artifacts
 }
 
 // determineArtifactsToInstall finds which artifacts need to be installed (new or changed)
-func determineArtifactsToInstall(previousInstall *artifacts.InstalledArtifacts, sortedArtifacts []*lockfile.Artifact, out *outputHelper) []*lockfile.Artifact {
+func determineArtifactsToInstall(previousInstall *artifacts.InstalledArtifacts, sortedArtifacts []*lockfile.Artifact, targetClientIDs []string, out *outputHelper) []*lockfile.Artifact {
 	log := logger.Get()
-	artifactsToInstall := artifacts.FindChangedOrNewArtifacts(previousInstall, sortedArtifacts)
+	artifactsToInstall := artifacts.FindArtifactsToInstallForClients(previousInstall, sortedArtifacts, targetClientIDs)
 
 	// Log version updates
 	for _, artifact := range artifactsToInstall {
@@ -406,82 +446,158 @@ func determineArtifactsToInstall(previousInstall *artifacts.InstalledArtifacts, 
 	return artifactsToInstall
 }
 
-// cleanupRemovedArtifacts removes artifacts that are no longer in the lock file
-func cleanupRemovedArtifacts(ctx context.Context, previousInstall *artifacts.InstalledArtifacts, sortedArtifacts []*lockfile.Artifact, trackingBase string, repo repository.Repository, out *outputHelper) {
+// cleanupRemovedArtifacts removes artifacts that are no longer in the lock file from all clients
+func cleanupRemovedArtifacts(ctx context.Context, previousInstall *artifacts.InstalledArtifacts, sortedArtifacts []*lockfile.Artifact, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) {
 	removedArtifacts := artifacts.FindRemovedArtifacts(previousInstall, sortedArtifacts)
 	if len(removedArtifacts) == 0 {
 		return
 	}
 
 	out.printf("\nCleaning up %d removed artifact(s)...\n", len(removedArtifacts))
-	installer := artifacts.NewArtifactInstaller(repo, trackingBase)
-	if err := installer.RemoveArtifacts(ctx, removedArtifacts); err != nil {
-		out.printfErr("Warning: cleanup failed: %v\n", err)
-		return
+
+	// Build uninstall scope
+	uninstallScope := buildInstallScope(currentScope, gitContext)
+
+	// Convert InstalledArtifact to artifact.Artifact for uninstall
+	artifactsToRemove := make([]artifact.Artifact, len(removedArtifacts))
+	for i, installed := range removedArtifacts {
+		artifactsToRemove[i] = artifact.Artifact{
+			Name:    installed.Name,
+			Version: installed.Version,
+			Type:    installed.Type,
+		}
 	}
 
+	// Create uninstall request
+	uninstallReq := clients.UninstallRequest{
+		Artifacts: artifactsToRemove,
+		Scope:     uninstallScope,
+		Options:   clients.UninstallOptions{},
+	}
+
+	// Uninstall from all clients
 	log := logger.Get()
-	for _, artifact := range removedArtifacts {
-		out.printf("  - Removed %s\n", artifact.Name)
-		log.Info("artifact removed", "name", artifact.Name, "version", artifact.Version, "type", artifact.Type)
+	for _, client := range targetClients {
+		resp, err := client.UninstallArtifacts(ctx, uninstallReq)
+		if err != nil {
+			out.printfErr("Warning: cleanup failed for %s: %v\n", client.DisplayName(), err)
+			continue
+		}
+
+		for _, result := range resp.Results {
+			if result.Status == clients.StatusSuccess {
+				out.printf("  - Removed %s from %s\n", result.ArtifactName, client.DisplayName())
+				log.Info("artifact removed", "name", result.ArtifactName, "client", client.ID())
+			} else if result.Status == clients.StatusFailed {
+				out.printfErr("Warning: failed to remove %s from %s: %v\n", result.ArtifactName, client.DisplayName(), result.Error)
+			}
+		}
 	}
 }
 
-// installArtifacts installs artifacts to their appropriate locations
-func installArtifacts(ctx context.Context, successfulDownloads []*artifacts.ArtifactWithMetadata, gitContext *gitutil.GitContext, currentScope *scope.Scope, claudeDir string, repo repository.Repository, out *outputHelper) *artifacts.InstallResult {
+// installArtifacts installs artifacts to all detected clients using the orchestrator
+func installArtifacts(ctx context.Context, successfulDownloads []*artifacts.ArtifactWithMetadata, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) *artifacts.InstallResult {
 	out.println("Installing artifacts...")
 
+	// Convert downloads to bundles
+	bundles := convertToArtifactBundles(successfulDownloads)
+
+	// Determine installation scope
+	installScope := buildInstallScope(currentScope, gitContext)
+
+	// Run installation across all clients
+	allResults := runMultiClientInstallation(ctx, bundles, installScope, targetClients)
+
+	// Process and report results
+	return processInstallationResults(allResults, out)
+}
+
+// convertToArtifactBundles converts downloaded artifacts to client bundles
+func convertToArtifactBundles(downloads []*artifacts.ArtifactWithMetadata) []*clients.ArtifactBundle {
+	bundles := make([]*clients.ArtifactBundle, len(downloads))
+	for i, item := range downloads {
+		bundles[i] = &clients.ArtifactBundle{
+			Artifact: item.Artifact,
+			Metadata: item.Metadata,
+			ZipData:  item.ZipData,
+		}
+	}
+	return bundles
+}
+
+// buildInstallScope creates the installation scope from current context
+func buildInstallScope(currentScope *scope.Scope, gitContext *gitutil.GitContext) *clients.InstallScope {
+	installScope := &clients.InstallScope{
+		Type:    clients.ScopeType(currentScope.Type),
+		RepoURL: currentScope.RepoURL,
+		Path:    currentScope.RepoPath,
+	}
+
+	if gitContext.IsRepo {
+		installScope.RepoRoot = gitContext.RepoRoot
+	}
+
+	return installScope
+}
+
+// runMultiClientInstallation executes installation across all clients concurrently
+func runMultiClientInstallation(ctx context.Context, bundles []*clients.ArtifactBundle, installScope *clients.InstallScope, targetClients []clients.Client) map[string]clients.InstallResponse {
+	orchestrator := clients.NewOrchestrator(clients.Global())
+	return orchestrator.InstallToClients(ctx, bundles, installScope, clients.InstallOptions{}, targetClients)
+}
+
+// processInstallationResults processes results from all clients and builds the final result
+func processInstallationResults(allResults map[string]clients.InstallResponse, out *outputHelper) *artifacts.InstallResult {
 	installResult := &artifacts.InstallResult{
 		Installed: []string{},
 		Failed:    []string{},
 		Errors:    []error{},
 	}
 
-	for _, item := range successfulDownloads {
-		select {
-		case <-ctx.Done():
-			installResult.Failed = append(installResult.Failed, item.Artifact.Name)
-			installResult.Errors = append(installResult.Errors, ctx.Err())
-			continue
-		default:
-		}
+	installedArtifacts := make(map[string]bool)
 
-		// Get all installation locations for this artifact in the current context
-		var installLocations []string
-		if gitContext.IsRepo {
-			installLocations = scope.GetInstallLocations(item.Artifact, currentScope, gitContext.RepoRoot, claudeDir)
-		} else {
-			installLocations = []string{claudeDir}
-		}
+	for clientID, resp := range allResults {
+		client, _ := clients.Global().Get(clientID)
 
-		if len(installLocations) == 0 {
-			continue
-		}
-
-		// Install artifact to each location
-		installFailed := false
-		for _, targetBase := range installLocations {
-			installer := artifacts.NewArtifactInstaller(repo, targetBase)
-			err := installer.Install(ctx, item.Artifact, item.ZipData, item.Metadata)
-
-			if err != nil {
-				installResult.Failed = append(installResult.Failed, item.Artifact.Name)
-				installResult.Errors = append(installResult.Errors, fmt.Errorf("%s: %w", item.Artifact.Name, err))
-				installFailed = true
-				break
+		for _, result := range resp.Results {
+			switch result.Status {
+			case clients.StatusSuccess:
+				out.printf("  ✓ %s → %s\n", result.ArtifactName, client.DisplayName())
+				installedArtifacts[result.ArtifactName] = true
+			case clients.StatusFailed:
+				out.printfErr("  ✗ %s → %s: %v\n", result.ArtifactName, client.DisplayName(), result.Error)
+				installResult.Failed = append(installResult.Failed, result.ArtifactName)
+				installResult.Errors = append(installResult.Errors, result.Error)
+			case clients.StatusSkipped:
+				// Don't print skipped artifacts
 			}
 		}
+	}
 
-		if !installFailed {
-			installResult.Installed = append(installResult.Installed, item.Artifact.Name)
-		}
+	// Build list of successfully installed artifacts
+	for name := range installedArtifacts {
+		installResult.Installed = append(installResult.Installed, name)
+	}
+
+	// Add error if ANY client failed
+	if clients.HasAnyErrors(allResults) {
+		installResult.Errors = append(installResult.Errors, fmt.Errorf("installation failed for one or more clients"))
 	}
 
 	return installResult
 }
 
+// ensureSkillsSupport calls EnsureSkillsSupport on all clients to set up local rules files, etc.
+func ensureSkillsSupport(ctx context.Context, targetClients []clients.Client, scope *clients.InstallScope, out *outputHelper) {
+	for _, client := range targetClients {
+		if err := client.EnsureSkillsSupport(ctx, scope); err != nil {
+			out.printfErr("Warning: failed to ensure skills support for %s: %v\n", client.DisplayName(), err)
+		}
+	}
+}
+
 // saveInstallationState saves the current installation state to tracker file
-func saveInstallationState(trackingBase string, lockFile *lockfile.LockFile, sortedArtifacts []*lockfile.Artifact, out *outputHelper) {
+func saveInstallationState(trackingBase string, lockFile *lockfile.LockFile, sortedArtifacts []*lockfile.Artifact, targetClientIDs []string, out *outputHelper) {
 	newInstall := &artifacts.InstalledArtifacts{
 		Version:         artifacts.TrackerFormatVersion,
 		LockFileVersion: lockFile.Version,
@@ -494,6 +610,7 @@ func saveInstallationState(trackingBase string, lockFile *lockfile.LockFile, sor
 			Name:    artifact.Name,
 			Version: artifact.Version,
 			Type:    artifact.Type,
+			Clients: targetClientIDs, // Track which clients this was installed to
 			// InstallPath will be populated in future enhancement
 		})
 	}

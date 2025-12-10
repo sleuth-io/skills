@@ -12,9 +12,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sleuth-io/skills/internal/artifacts"
+	"github.com/sleuth-io/skills/internal/artifacts/detectors"
 	"github.com/sleuth-io/skills/internal/config"
 	"github.com/sleuth-io/skills/internal/gitutil"
-	"github.com/sleuth-io/skills/internal/handlers"
 	"github.com/sleuth-io/skills/internal/logger"
 	"github.com/sleuth-io/skills/internal/repository"
 	"github.com/sleuth-io/skills/internal/scope"
@@ -60,13 +60,13 @@ func runReportUsage(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create all handlers for detection
-	allHandlers := []handlers.UsageDetector{
-		&handlers.SkillHandler{},
-		&handlers.AgentHandler{},
-		&handlers.CommandHandler{},
-		&handlers.MCPHandler{},
-		&handlers.MCPRemoteHandler{},
-		&handlers.HookHandler{},
+	allHandlers := []detectors.UsageDetector{
+		&detectors.SkillDetector{},
+		&detectors.AgentDetector{},
+		&detectors.CommandDetector{},
+		&detectors.MCPDetector{},
+		&detectors.MCPRemoteDetector{},
+		&detectors.HookDetector{},
 	}
 
 	// Try to detect artifact usage from each handler
@@ -78,7 +78,7 @@ func runReportUsage(cmd *cobra.Command, args []string) error {
 		artifactName, detected = handler.DetectUsageFromToolCall(event.ToolName, event.ToolInput)
 		if detected {
 			// Get artifact type from handler
-			if typedHandler, ok := handler.(handlers.ArtifactTypeDetector); ok {
+			if typedHandler, ok := handler.(detectors.ArtifactTypeDetector); ok {
 				artifactType = typedHandler.GetType()
 			}
 			break

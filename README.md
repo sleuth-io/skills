@@ -73,10 +73,21 @@ Sleuth Skills uses a lock file, like package-lock.json, for deterministic instal
 4. **Auto-install** on new Claude Code sessions
 5. **Stay synchronized** - everyone gets the same tools automatically
 
+## Supported Clients
+
+| Client | Status         | Notes |
+|--------|----------------|-------|
+| Claude Code | ✅ Supported    | Full support for all artifact types |
+| Cursor | ✅ Experimental | Skills, MCP servers, commands, hooks |
+| GitHub Copilot | Coming soon    | |
+| Gemini | Coming soon    | |
+| Codex | Coming soon    | |
+
 ## Roadmap
 - ✅ Local, Git, and Sleuth repositories
 - ✅ Claude Code support
-- **Multi-client support** - Use the same skills in Cursor, Windsurf, Cline
+- ✅ Cursor support (experimental)
+- **More clients** - GitHub Copilot, Gemini, Codex
 - **Skill discovery** - Use Sleuth to discover relevant skills from your code and architecture
 - **Analytics** - Track skill usage and impact
 

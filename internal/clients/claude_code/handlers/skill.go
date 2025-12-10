@@ -3,13 +3,15 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
+
+var skillOps = dirartifact.NewOperations("skills", &artifact.TypeSkill)
 
 // SkillHandler handles skill artifact installation
 type SkillHandler struct {
@@ -93,43 +95,12 @@ func (h *SkillHandler) Install(ctx context.Context, zipData []byte, targetBase s
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Determine installation path
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
-	// Remove existing installation if present
-	if utils.IsDirectory(installPath) {
-		if err := os.RemoveAll(installPath); err != nil {
-			return fmt.Errorf("failed to remove existing installation: %w", err)
-		}
-	}
-
-	// Create installation directory
-	if err := utils.EnsureDir(installPath); err != nil {
-		return fmt.Errorf("failed to create installation directory: %w", err)
-	}
-
-	// Extract zip to installation directory
-	if err := utils.ExtractZip(zipData, installPath); err != nil {
-		return fmt.Errorf("failed to extract zip: %w", err)
-	}
-
-	return nil
+	return skillOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name)
 }
 
 // Remove uninstalls the skill artifact
 func (h *SkillHandler) Remove(ctx context.Context, targetBase string) error {
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
-	if !utils.IsDirectory(installPath) {
-		// Already removed or never installed
-		return nil
-	}
-
-	if err := os.RemoveAll(installPath); err != nil {
-		return fmt.Errorf("failed to remove skill: %w", err)
-	}
-
-	return nil
+	return skillOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
@@ -186,47 +157,6 @@ func (h *SkillHandler) Validate(zipData []byte) error {
 // CanDetectInstalledState returns true since skills preserve metadata.toml
 func (h *SkillHandler) CanDetectInstalledState() bool {
 	return true
-}
-
-// ScanInstalled scans for installed skill artifacts in the target directory
-func (h *SkillHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
-	var artifacts []InstalledArtifactInfo
-
-	skillsPath := filepath.Join(targetBase, "skills")
-	if !utils.IsDirectory(skillsPath) {
-		return artifacts, nil
-	}
-
-	dirs, err := os.ReadDir(skillsPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read skills directory: %w", err)
-	}
-
-	for _, dir := range dirs {
-		if !dir.IsDir() {
-			continue
-		}
-
-		metaPath := filepath.Join(skillsPath, dir.Name(), "metadata.toml")
-		meta, err := metadata.ParseFile(metaPath)
-		if err != nil {
-			continue // Skip if can't parse
-		}
-
-		// Only include if it's actually a skill (not agent which also uses skills/ dir)
-		if meta.Artifact.Type != artifact.TypeSkill {
-			continue
-		}
-
-		artifacts = append(artifacts, InstalledArtifactInfo{
-			Name:        meta.Artifact.Name,
-			Version:     meta.Artifact.Version,
-			Type:        meta.Artifact.Type,
-			InstallPath: filepath.Join("skills", dir.Name()),
-		})
-	}
-
-	return artifacts, nil
 }
 
 // containsFile checks if a file exists in the file list

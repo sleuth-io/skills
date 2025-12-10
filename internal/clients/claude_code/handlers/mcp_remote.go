@@ -219,11 +219,6 @@ func (h *MCPRemoteHandler) CanDetectInstalledState() bool {
 	return false
 }
 
-// ScanInstalled returns empty since mcp-remote cannot be detected from filesystem
-func (h *MCPRemoteHandler) ScanInstalled(targetBase string) ([]InstalledArtifactInfo, error) {
-	return nil, nil
-}
-
 // DetectUsageFromToolCall detects MCP remote server usage from tool calls
 // MCP remote uses the same tool naming pattern as regular MCP, so we use the same logic
 func (h *MCPRemoteHandler) DetectUsageFromToolCall(toolName string, toolInput map[string]interface{}) (string, bool) {

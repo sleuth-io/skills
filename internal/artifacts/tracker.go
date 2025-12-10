@@ -30,6 +30,7 @@ type InstalledArtifact struct {
 	Version     string        `json:"version"`
 	Type        artifact.Type `json:"type"`
 	InstallPath string        `json:"installPath"`
+	Clients     []string      `json:"clients"` // Which clients this is installed to
 }
 
 // GetTrackerPath returns the path to the installed artifacts tracker
@@ -140,6 +141,50 @@ func FindChangedOrNewArtifacts(previous *InstalledArtifacts, current []*lockfile
 	}
 
 	return changed
+}
+
+// FindArtifactsToInstallForClients returns artifacts that need installation for specific clients
+// An artifact needs installation if:
+// - It's new (not in previous install)
+// - Version changed
+// - Not installed to one or more target clients
+func FindArtifactsToInstallForClients(previous *InstalledArtifacts, current []*lockfile.Artifact, targetClientIDs []string) []*lockfile.Artifact {
+	// Build map of previous installations: name -> artifact
+	previousMap := make(map[string]InstalledArtifact)
+	for _, installed := range previous.Artifacts {
+		previousMap[installed.Name] = installed
+	}
+
+	var toInstall []*lockfile.Artifact
+	for _, artifact := range current {
+		prev, exists := previousMap[artifact.Name]
+
+		// New artifact or version changed
+		if !exists || prev.Version != artifact.Version {
+			toInstall = append(toInstall, artifact)
+			continue
+		}
+
+		// Check if installed to all target clients
+		installedClients := make(map[string]bool)
+		for _, clientID := range prev.Clients {
+			installedClients[clientID] = true
+		}
+
+		needsInstall := false
+		for _, targetClient := range targetClientIDs {
+			if !installedClients[targetClient] {
+				needsInstall = true
+				break
+			}
+		}
+
+		if needsInstall {
+			toInstall = append(toInstall, artifact)
+		}
+	}
+
+	return toInstall
 }
 
 // ValidationResult contains discrepancies between tracker and filesystem

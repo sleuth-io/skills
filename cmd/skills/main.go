@@ -7,11 +7,20 @@ import (
 
 	"github.com/sleuth-io/skills/internal/autoupdate"
 	"github.com/sleuth-io/skills/internal/buildinfo"
+	"github.com/sleuth-io/skills/internal/clients"
+	"github.com/sleuth-io/skills/internal/clients/claude_code"
+	"github.com/sleuth-io/skills/internal/clients/cursor"
 	"github.com/sleuth-io/skills/internal/commands"
 	"github.com/sleuth-io/skills/internal/git"
 	"github.com/sleuth-io/skills/internal/logger"
 	"github.com/spf13/cobra"
 )
+
+func init() {
+	// Register all clients
+	clients.Register(claude_code.NewClient())
+	clients.Register(cursor.NewClient()) // TODO: Uncomment after thorough testing
+}
 
 func main() {
 	// Log command invocation
@@ -56,6 +65,7 @@ from remote Sleuth servers or Git repositories.`,
 	rootCmd.AddCommand(commands.NewUpdateTemplatesCommand())
 	rootCmd.AddCommand(commands.NewUpdateCommand())
 	rootCmd.AddCommand(commands.NewReportUsageCommand())
+	rootCmd.AddCommand(commands.NewServeCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

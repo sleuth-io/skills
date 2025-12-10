@@ -85,3 +85,15 @@ func (t *Type) UnmarshalText(text []byte) error {
 	*t = FromString(string(text))
 	return nil
 }
+
+// AllTypes returns all defined artifact types
+func AllTypes() []Type {
+	return []Type{
+		TypeMCP,
+		TypeMCPRemote,
+		TypeSkill,
+		TypeAgent,
+		TypeCommand,
+		TypeHook,
+	}
+}

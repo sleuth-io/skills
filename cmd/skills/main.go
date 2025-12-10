@@ -7,11 +7,18 @@ import (
 
 	"github.com/sleuth-io/skills/internal/autoupdate"
 	"github.com/sleuth-io/skills/internal/buildinfo"
+	"github.com/sleuth-io/skills/internal/clients"
+	"github.com/sleuth-io/skills/internal/clients/claude_code"
 	"github.com/sleuth-io/skills/internal/commands"
 	"github.com/sleuth-io/skills/internal/git"
 	"github.com/sleuth-io/skills/internal/logger"
 	"github.com/spf13/cobra"
 )
+
+func init() {
+	// Register all clients
+	clients.Register(claude_code.NewClient())
+}
 
 func main() {
 	// Log command invocation

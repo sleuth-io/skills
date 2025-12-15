@@ -158,3 +158,38 @@ func (a *Artifact) String() string {
 func (a *Artifact) Key() string {
 	return fmt.Sprintf("%s@%s", a.Name, a.Version)
 }
+
+// ScopedArtifact represents an artifact with its scope information
+type ScopedArtifact struct {
+	Artifact *Artifact
+	Scope    string // "Global", repo URL, or "repo:path"
+}
+
+// GroupByScope returns all artifacts grouped by their scope
+// An artifact can appear in multiple scopes
+func (lf *LockFile) GroupByScope() map[string][]*Artifact {
+	result := make(map[string][]*Artifact)
+
+	for i := range lf.Artifacts {
+		art := &lf.Artifacts[i]
+
+		if art.IsGlobal() {
+			result["Global"] = append(result["Global"], art)
+		} else {
+			for _, repo := range art.Repositories {
+				if len(repo.Paths) == 0 {
+					// Repo-scoped
+					result[repo.Repo] = append(result[repo.Repo], art)
+				} else {
+					// Path-scoped
+					for _, path := range repo.Paths {
+						scopeKey := fmt.Sprintf("%s:%s", repo.Repo, path)
+						result[scopeKey] = append(result[scopeKey], art)
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}

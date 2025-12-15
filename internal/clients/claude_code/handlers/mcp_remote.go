@@ -219,6 +219,36 @@ func (h *MCPRemoteHandler) CanDetectInstalledState() bool {
 	return false
 }
 
+// VerifyInstalled checks if the MCP remote server is registered in .mcp.json
+func (h *MCPRemoteHandler) VerifyInstalled(targetBase string) (bool, string) {
+	mcpConfigPath := filepath.Join(targetBase, ".mcp.json")
+
+	if !utils.FileExists(mcpConfigPath) {
+		return false, ".mcp.json not found"
+	}
+
+	data, err := os.ReadFile(mcpConfigPath)
+	if err != nil {
+		return false, "failed to read .mcp.json: " + err.Error()
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return false, "failed to parse .mcp.json: " + err.Error()
+	}
+
+	mcpServers, ok := config["mcpServers"].(map[string]interface{})
+	if !ok {
+		return false, "mcpServers section not found"
+	}
+
+	if _, exists := mcpServers[h.metadata.Artifact.Name]; !exists {
+		return false, "MCP remote server not registered"
+	}
+
+	return true, "installed"
+}
+
 // DetectUsageFromToolCall detects MCP remote server usage from tool calls
 // MCP remote uses the same tool naming pattern as regular MCP, so we use the same logic
 func (h *MCPRemoteHandler) DetectUsageFromToolCall(toolName string, toolInput map[string]interface{}) (string, bool) {

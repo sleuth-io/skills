@@ -9,9 +9,12 @@ import (
 	"strings"
 
 	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
+
+var mcpOps = dirartifact.NewOperations("mcp-servers", &artifact.TypeMCP)
 
 // MCPHandler handles MCP server artifact installation
 type MCPHandler struct {
@@ -93,27 +96,13 @@ func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase str
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Determine installation path
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
-	// Remove existing installation if present
-	if utils.IsDirectory(installPath) {
-		if err := os.RemoveAll(installPath); err != nil {
-			return fmt.Errorf("failed to remove existing installation: %w", err)
-		}
-	}
-
-	// Create installation directory
-	if err := utils.EnsureDir(installPath); err != nil {
-		return fmt.Errorf("failed to create installation directory: %w", err)
-	}
-
-	// Extract zip to installation directory
-	if err := utils.ExtractZip(zipData, installPath); err != nil {
-		return fmt.Errorf("failed to extract zip: %w", err)
+	// Extract to mcp-servers directory
+	if err := mcpOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name); err != nil {
+		return err
 	}
 
 	// Update .mcp.json to register the MCP server
+	installPath := filepath.Join(targetBase, h.GetInstallPath())
 	if err := h.updateMCPConfig(targetBase, installPath); err != nil {
 		return fmt.Errorf("failed to update MCP config: %w", err)
 	}
@@ -123,21 +112,13 @@ func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase str
 
 // Remove uninstalls the MCP server artifact
 func (h *MCPHandler) Remove(ctx context.Context, targetBase string) error {
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
 	// Remove from .mcp.json first
 	if err := h.removeFromMCPConfig(targetBase); err != nil {
 		return fmt.Errorf("failed to remove from MCP config: %w", err)
 	}
 
 	// Remove installation directory
-	if utils.IsDirectory(installPath) {
-		if err := os.RemoveAll(installPath); err != nil {
-			return fmt.Errorf("failed to remove MCP server: %w", err)
-		}
-	}
-
-	return nil
+	return mcpOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
@@ -314,4 +295,9 @@ func (h *MCPHandler) buildMCPServerConfig(installPath string) map[string]interfa
 // CanDetectInstalledState returns true since MCP servers preserve metadata.toml
 func (h *MCPHandler) CanDetectInstalledState() bool {
 	return true
+}
+
+// VerifyInstalled checks if the MCP server is properly installed
+func (h *MCPHandler) VerifyInstalled(targetBase string) (bool, string) {
+	return mcpOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
 }

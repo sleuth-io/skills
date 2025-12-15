@@ -56,6 +56,11 @@ type Client interface {
 	// For clients like Cursor that fire hooks on every prompt, this enables
 	// tracking conversation IDs to only run install once per conversation.
 	ShouldInstall(ctx context.Context) (bool, error)
+
+	// VerifyArtifacts checks if artifacts are actually installed (not just tracked).
+	// Used by --repair mode to detect discrepancies between tracker and filesystem.
+	// Each client implements verification according to its own installation structure.
+	VerifyArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, scope *InstallScope) []VerifyResult
 }
 
 // InstalledSkill represents a skill that has been installed
@@ -149,6 +154,13 @@ const (
 	StatusFailed  ResultStatus = "failed"
 	StatusSkipped ResultStatus = "skipped"
 )
+
+// VerifyResult represents the result of verifying a single artifact's installation
+type VerifyResult struct {
+	Artifact  *lockfile.Artifact // The artifact that was verified
+	Installed bool               // Whether the artifact is actually installed correctly
+	Message   string             // Details about what was found or missing
+}
 
 // BaseClient provides default implementations for common functionality
 type BaseClient struct {

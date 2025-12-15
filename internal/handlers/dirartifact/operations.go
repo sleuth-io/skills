@@ -116,6 +116,31 @@ func (o *Operations) GetArtifactDir(targetBase string, artifactName string) stri
 	return filepath.Join(targetBase, o.subdir, artifactName)
 }
 
+// VerifyInstalled checks if an artifact is installed with the expected version
+func (o *Operations) VerifyInstalled(targetBase string, artifactName string, expectedVersion string) (bool, string) {
+	artifactDir := o.GetArtifactDir(targetBase, artifactName)
+
+	if !utils.IsDirectory(artifactDir) {
+		return false, "directory not found"
+	}
+
+	metaPath := filepath.Join(artifactDir, "metadata.toml")
+	if !utils.FileExists(metaPath) {
+		return false, "metadata.toml not found"
+	}
+
+	meta, err := metadata.ParseFile(metaPath)
+	if err != nil {
+		return false, "failed to parse metadata: " + err.Error()
+	}
+
+	if meta.Artifact.Version != expectedVersion {
+		return false, fmt.Sprintf("version mismatch: installed %s, expected %s", meta.Artifact.Version, expectedVersion)
+	}
+
+	return true, "installed"
+}
+
 // PromptFileGetter is a function that extracts the prompt file path from metadata.
 // Returns empty string if not specified, in which case the default will be used.
 type PromptFileGetter func(meta *metadata.Metadata) string

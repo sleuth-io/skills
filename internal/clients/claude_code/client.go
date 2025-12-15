@@ -11,6 +11,7 @@ import (
 	"github.com/sleuth-io/skills/internal/clients"
 	"github.com/sleuth-io/skills/internal/clients/claude_code/handlers"
 	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
+	"github.com/sleuth-io/skills/internal/lockfile"
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
@@ -252,4 +253,33 @@ func (c *Client) UninstallHooks(ctx context.Context) error {
 // deduplication is needed.
 func (c *Client) ShouldInstall(ctx context.Context) (bool, error) {
 	return true, nil
+}
+
+// VerifyArtifacts checks if artifacts are actually installed on the filesystem
+func (c *Client) VerifyArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, scope *clients.InstallScope) []clients.VerifyResult {
+	targetBase := c.determineTargetBase(scope)
+	results := make([]clients.VerifyResult, 0, len(artifacts))
+
+	for _, art := range artifacts {
+		result := clients.VerifyResult{
+			Artifact: art,
+		}
+
+		handler, err := handlers.NewHandler(art.Type, &metadata.Metadata{
+			Artifact: metadata.Artifact{
+				Name:    art.Name,
+				Version: art.Version,
+				Type:    art.Type,
+			},
+		})
+		if err != nil {
+			result.Message = err.Error()
+		} else {
+			result.Installed, result.Message = handler.VerifyInstalled(targetBase)
+		}
+
+		results = append(results, result)
+	}
+
+	return results
 }

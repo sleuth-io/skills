@@ -28,6 +28,7 @@ import (
 func NewInstallCommand() *cobra.Command {
 	var hookMode bool
 	var clientID string
+	var fixMode bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -35,12 +36,13 @@ func NewInstallCommand() *cobra.Command {
 		Long: fmt.Sprintf(`Read the %s file, fetch artifacts from the configured repository,
 and install them to ~/.claude/ directory.`, constants.SkillLockFile),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInstall(cmd, args, hookMode, clientID)
+			return runInstall(cmd, args, hookMode, clientID, fixMode)
 		},
 	}
 
 	cmd.Flags().BoolVar(&hookMode, "hook-mode", false, "Run in hook mode (outputs JSON for Claude Code)")
 	cmd.Flags().StringVar(&clientID, "client", "", "Client ID that triggered the hook (used with --hook-mode)")
+	cmd.Flags().BoolVar(&fixMode, "repair", false, "Verify artifacts are actually installed and fix any discrepancies")
 	_ = cmd.Flags().MarkHidden("hook-mode") // Hide from help output since it's internal
 	_ = cmd.Flags().MarkHidden("client")    // Hide from help output since it's internal
 
@@ -48,7 +50,7 @@ and install them to ~/.claude/ directory.`, constants.SkillLockFile),
 }
 
 // runInstall executes the install command
-func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID string) error {
+func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID string, repairMode bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
@@ -88,34 +90,29 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	// Fetch lock file with ETag caching
 	out.println("Fetching lock file...")
 
-	var cachedETag string
-	var repoURL string
-	if cfg.Type == config.RepositoryTypeSleuth {
-		repoURL = cfg.GetServerURL()
-		cachedETag, _ = cache.LoadETag(repoURL)
-	}
+	cachedETag, _ := cache.LoadETag(cfg.RepositoryURL)
 
 	lockFileData, newETag, notModified, err := repo.GetLockFile(ctx, cachedETag)
 	if err != nil {
 		return fmt.Errorf("failed to fetch lock file: %w", err)
 	}
 
-	if notModified && repoURL != "" {
+	if notModified {
 		out.println("Lock file unchanged (using cached version)")
-		lockFileData, err = cache.LoadLockFile(repoURL)
+		lockFileData, err = cache.LoadLockFile(cfg.RepositoryURL)
 		if err != nil {
 			return fmt.Errorf("failed to load cached lock file: %w", err)
 		}
-	} else if repoURL != "" && newETag != "" {
-		// Save new ETag and lock file content
+	} else {
+		// Save ETag and lock file content
 		log := logger.Get()
-		if err := cache.SaveETag(repoURL, newETag); err != nil {
-			out.printfErr("Warning: failed to save ETag: %v\n", err)
-			log.Error("failed to save ETag", "repo_url", repoURL, "error", err)
+		if newETag != "" {
+			if err := cache.SaveETag(cfg.RepositoryURL, newETag); err != nil {
+				log.Error("failed to save ETag", "error", err)
+			}
 		}
-		if err := cache.SaveLockFile(repoURL, lockFileData); err != nil {
-			out.printfErr("Warning: failed to cache lock file: %v\n", err)
-			log.Error("failed to cache lock file", "repo_url", repoURL, "error", err)
+		if err := cache.SaveLockFile(cfg.RepositoryURL, lockFileData); err != nil {
+			log.Error("failed to cache lock file", "error", err)
 		}
 	}
 
@@ -258,6 +255,12 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	for i, client := range targetClients {
 		targetClientIDs[i] = client.ID()
 	}
+
+	// In repair mode, verify artifacts against filesystem and update tracker
+	if repairMode {
+		repairTracker(ctx, tracker, sortedArtifacts, targetClients, gitContext, currentScope, out)
+	}
+
 	artifactsToInstall := determineArtifactsToInstall(tracker, sortedArtifacts, currentScope, targetClientIDs, out)
 
 	// Clean up artifacts that were removed from lock file
@@ -558,6 +561,60 @@ func cleanupRemovedArtifacts(ctx context.Context, tracker *artifacts.Tracker, so
 	for _, removed := range removedArtifacts {
 		tracker.RemoveArtifact(removed.Key())
 	}
+}
+
+// repairTracker verifies artifacts against the filesystem and updates the tracker to match reality
+// This is called when --repair flag is used to fix discrepancies between tracker and actual installation
+func repairTracker(ctx context.Context, tracker *artifacts.Tracker, sortedArtifacts []*lockfile.Artifact, targetClients []clients.Client, gitContext *gitutil.GitContext, currentScope *scope.Scope, out *outputHelper) {
+	log := logger.Get()
+	out.println("Repair mode: verifying installed artifacts...")
+
+	installScope := buildInstallScope(currentScope, gitContext)
+
+	// Track which artifacts are missing for each client
+	var totalMissing int
+
+	for _, client := range targetClients {
+		// Verify all artifacts for this client
+		results := client.VerifyArtifacts(ctx, sortedArtifacts, installScope)
+
+		// Update tracker based on verification results
+		for _, result := range results {
+			if !result.Installed {
+				out.printf("  ✗ %s not installed for %s: %s\n", result.Artifact.Name, client.DisplayName(), result.Message)
+				log.Info("artifact verification failed", "name", result.Artifact.Name, "client", client.ID(), "reason", result.Message)
+
+				// Remove this client from the artifact's tracker entry
+				key := artifacts.NewArtifactKey(result.Artifact.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+				existing := tracker.FindArtifact(key)
+				if existing != nil {
+					// Remove this client from the list
+					var updatedClients []string
+					for _, c := range existing.Clients {
+						if c != client.ID() {
+							updatedClients = append(updatedClients, c)
+						}
+					}
+
+					if len(updatedClients) == 0 {
+						// No clients left, remove entirely
+						tracker.RemoveArtifact(key)
+					} else {
+						existing.Clients = updatedClients
+						tracker.UpsertArtifact(*existing)
+					}
+				}
+				totalMissing++
+			}
+		}
+	}
+
+	if totalMissing == 0 {
+		out.println("  ✓ All artifacts verified")
+	} else {
+		out.printf("  Found %d missing artifacts that will be reinstalled\n", totalMissing)
+	}
+	out.println()
 }
 
 // installArtifacts installs artifacts to all detected clients using the orchestrator

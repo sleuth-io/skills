@@ -6,9 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
+
+var skillOps = dirartifact.NewOperations("skills", &artifact.TypeSkill)
 
 // SkillHandler handles skill artifact installation for Cursor
 // Skills are extracted to .cursor/skills/{name}/ (not transformed to commands)
@@ -59,4 +63,9 @@ func (h *SkillHandler) Remove(ctx context.Context, targetBase string) error {
 	}
 
 	return nil
+}
+
+// VerifyInstalled checks if the skill is properly installed
+func (h *SkillHandler) VerifyInstalled(targetBase string) (bool, string) {
+	return skillOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
 }

@@ -228,3 +228,30 @@ func (h *CommandHandler) removeMetadataFile(installPath string) {
 func (h *CommandHandler) CanDetectInstalledState() bool {
 	return true
 }
+
+// VerifyInstalled checks if the command is properly installed
+func (h *CommandHandler) VerifyInstalled(targetBase string) (bool, string) {
+	commandPath := filepath.Join(targetBase, h.GetInstallPath())
+
+	if !utils.FileExists(commandPath) {
+		return false, "command file not found"
+	}
+
+	// Check metadata file for version verification
+	metadataPath := strings.TrimSuffix(commandPath, ".md") + "-metadata.toml"
+	if !utils.FileExists(metadataPath) {
+		// No metadata file - can only verify file exists
+		return true, "installed (no version info)"
+	}
+
+	meta, err := metadata.ParseFile(metadataPath)
+	if err != nil {
+		return false, "failed to parse metadata: " + err.Error()
+	}
+
+	if meta.Artifact.Version != h.metadata.Artifact.Version {
+		return false, fmt.Sprintf("version mismatch: installed %s, expected %s", meta.Artifact.Version, h.metadata.Artifact.Version)
+	}
+
+	return true, "installed"
+}

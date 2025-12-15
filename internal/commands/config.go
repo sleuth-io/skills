@@ -17,18 +17,20 @@ import (
 	"github.com/sleuth-io/skills/internal/cache"
 	"github.com/sleuth-io/skills/internal/clients"
 	"github.com/sleuth-io/skills/internal/config"
+	"github.com/sleuth-io/skills/internal/lockfile"
 	"github.com/sleuth-io/skills/internal/utils"
 )
 
 // ConfigOutput represents the full config output for JSON serialization
 type ConfigOutput struct {
-	Version     VersionInfo      `json:"version"`
-	Platform    PlatformInfo     `json:"platform"`
-	Config      ConfigInfo       `json:"config"`
-	Directories DirectoryInfo    `json:"directories"`
-	Clients     []ClientInfo     `json:"clients"`
-	Artifacts   []ScopeArtifacts `json:"artifacts"`
-	RecentLogs  []string         `json:"recentLogs"`
+	Version           VersionInfo      `json:"version"`
+	Platform          PlatformInfo     `json:"platform"`
+	Config            ConfigInfo       `json:"config"`
+	Directories       DirectoryInfo    `json:"directories"`
+	Clients           []ClientInfo     `json:"clients"`
+	Artifacts         []ScopeArtifacts `json:"artifacts"`
+	LockFileArtifacts []ScopeArtifacts `json:"lockFileArtifacts,omitempty"`
+	RecentLogs        []string         `json:"recentLogs"`
 }
 
 type VersionInfo struct {
@@ -95,21 +97,23 @@ func NewConfigCommand() *cobra.Command {
 		RunE:  runConfig,
 	}
 	cmd.Flags().Bool("json", false, "Output in JSON format")
+	cmd.Flags().Bool("all", false, "Show all artifacts from lock file, not just those for current repo context")
 	return cmd
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
+	showAll, _ := cmd.Flags().GetBool("all")
 
-	output := gatherConfigInfo()
+	output := gatherConfigInfo(showAll)
 
 	if jsonOutput {
 		return printJSON(output)
 	}
-	return printText(output)
+	return printText(output, showAll)
 }
 
-func gatherConfigInfo() ConfigOutput {
+func gatherConfigInfo(showAll bool) ConfigOutput {
 	output := ConfigOutput{}
 
 	// Version info
@@ -136,8 +140,13 @@ func gatherConfigInfo() ConfigOutput {
 	// Client info
 	output.Clients = gatherClientInfo()
 
-	// Installed artifacts
+	// Installed artifacts (from tracker)
 	output.Artifacts = gatherInstalledArtifacts()
+
+	// Lock file artifacts (when --all is used)
+	if showAll {
+		output.LockFileArtifacts = gatherLockFileArtifacts()
+	}
 
 	// Recent logs
 	output.RecentLogs = gatherRecentLogs(5)
@@ -295,6 +304,48 @@ func gatherInstalledArtifacts() []ScopeArtifacts {
 	return scopes
 }
 
+func gatherLockFileArtifacts() []ScopeArtifacts {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil
+	}
+
+	// Load cached lock file
+	lockFileData, err := cache.LoadLockFile(cfg.RepositoryURL)
+	if err != nil || len(lockFileData) == 0 {
+		return nil
+	}
+
+	lf, err := lockfile.Parse(lockFileData)
+	if err != nil {
+		return nil
+	}
+
+	grouped := lf.GroupByScope()
+
+	var scopes []ScopeArtifacts
+	for scopeName, arts := range grouped {
+		scope := ScopeArtifacts{
+			Scope:           scopeName,
+			LockFileVersion: lf.Version,
+			Artifacts:       []ArtifactInfo{},
+		}
+
+		for _, art := range arts {
+			scope.Artifacts = append(scope.Artifacts, ArtifactInfo{
+				Name:    art.Name,
+				Version: art.Version,
+				Type:    art.Type.Key,
+				Clients: art.Clients,
+			})
+		}
+
+		scopes = append(scopes, scope)
+	}
+
+	return scopes
+}
+
 func gatherRecentLogs(lines int) []string {
 	cacheDir, err := cache.GetCacheDir()
 	if err != nil {
@@ -333,7 +384,7 @@ func printJSON(output ConfigOutput) error {
 	return nil
 }
 
-func printText(output ConfigOutput) error {
+func printText(output ConfigOutput, showAll bool) error {
 	fmt.Println("Skills CLI Configuration")
 	fmt.Println("========================")
 	fmt.Println()
@@ -435,6 +486,23 @@ func printText(output ConfigOutput) error {
 		fmt.Println("Installed Artifacts")
 		fmt.Println("-------------------")
 		fmt.Println("No artifacts installed.")
+		fmt.Println()
+	}
+
+	// Lock file artifacts (when --all is used)
+	if showAll && len(output.LockFileArtifacts) > 0 {
+		fmt.Println("Lock File Artifacts (all scopes)")
+		fmt.Println("---------------------------------")
+		for _, scope := range output.LockFileArtifacts {
+			fmt.Printf("%s:\n", scope.Scope)
+			for _, art := range scope.Artifacts {
+				clientsStr := ""
+				if len(art.Clients) > 0 {
+					clientsStr = fmt.Sprintf(" [%s]", strings.Join(art.Clients, ", "))
+				}
+				fmt.Printf("  - %s (%s) %s%s\n", art.Name, art.Version, art.Type, clientsStr)
+			}
+		}
 		fmt.Println()
 	}
 

@@ -7,9 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
+
+var hookOps = dirartifact.NewOperations("hooks", &artifact.TypeHook)
 
 // HookHandler handles hook artifact installation for Cursor
 type HookHandler struct {
@@ -223,4 +227,9 @@ func containsFile(files []string, name string) bool {
 		}
 	}
 	return false
+}
+
+// VerifyInstalled checks if the hook is properly installed
+func (h *HookHandler) VerifyInstalled(targetBase string) (bool, string) {
+	return hookOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
 }

@@ -7,9 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
+
+var mcpOps = dirartifact.NewOperations("mcp-servers", &artifact.TypeMCP)
 
 // MCPHandler handles MCP artifact installation for Cursor
 type MCPHandler struct {
@@ -146,4 +150,9 @@ func WriteMCPConfig(path string, config *MCPConfig) error {
 	}
 
 	return os.WriteFile(path, data, 0644)
+}
+
+// VerifyInstalled checks if the MCP server is properly installed
+func (h *MCPHandler) VerifyInstalled(targetBase string) (bool, string) {
+	return mcpOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
 }

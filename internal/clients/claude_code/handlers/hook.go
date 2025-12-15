@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 
 	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
+
+var hookOps = dirartifact.NewOperations("hooks", &artifact.TypeHook)
 
 // HookHandler handles hook artifact installation
 type HookHandler struct {
@@ -95,24 +98,9 @@ func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase st
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Determine installation path
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
-	// Remove existing installation if present
-	if utils.IsDirectory(installPath) {
-		if err := os.RemoveAll(installPath); err != nil {
-			return fmt.Errorf("failed to remove existing installation: %w", err)
-		}
-	}
-
-	// Create installation directory
-	if err := utils.EnsureDir(installPath); err != nil {
-		return fmt.Errorf("failed to create installation directory: %w", err)
-	}
-
-	// Extract zip to installation directory
-	if err := utils.ExtractZip(zipData, installPath); err != nil {
-		return fmt.Errorf("failed to extract zip: %w", err)
+	// Extract to hooks directory
+	if err := hookOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name); err != nil {
+		return err
 	}
 
 	// Update settings.json to register the hook
@@ -125,21 +113,13 @@ func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase st
 
 // Remove uninstalls the hook artifact
 func (h *HookHandler) Remove(ctx context.Context, targetBase string) error {
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
 	// Remove from settings.json first
 	if err := h.removeFromSettings(targetBase); err != nil {
 		return fmt.Errorf("failed to remove from settings: %w", err)
 	}
 
 	// Remove installation directory
-	if utils.IsDirectory(installPath) {
-		if err := os.RemoveAll(installPath); err != nil {
-			return fmt.Errorf("failed to remove hook: %w", err)
-		}
-	}
-
-	return nil
+	return hookOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
@@ -347,4 +327,9 @@ func (h *HookHandler) buildHookConfig() map[string]interface{} {
 // CanDetectInstalledState returns true since hooks preserve metadata.toml
 func (h *HookHandler) CanDetectInstalledState() bool {
 	return true
+}
+
+// VerifyInstalled checks if the hook is properly installed
+func (h *HookHandler) VerifyInstalled(targetBase string) (bool, string) {
+	return hookOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
 }

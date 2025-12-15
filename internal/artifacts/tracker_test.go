@@ -1,7 +1,6 @@
 package artifacts
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -24,18 +23,13 @@ func TestGetTrackerPath(t *testing.T) {
 }
 
 func TestTrackerOperations(t *testing.T) {
-	// Create a temp directory and override cache for testing
-	tmpDir, err := os.MkdirTemp("", "tracker-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+	// Create a fresh in-memory tracker for testing (don't load from disk)
+	tracker := &Tracker{
+		Version:   TrackerFormatVersion,
+		Artifacts: []InstalledArtifact{},
 	}
-	defer os.RemoveAll(tmpDir)
 
-	// Test loading empty tracker
-	tracker, err := LoadTracker()
-	if err != nil {
-		t.Fatalf("LoadTracker() error = %v", err)
-	}
+	// Verify tracker starts empty
 	if len(tracker.Artifacts) != 0 {
 		t.Errorf("Expected empty tracker, got %d artifacts", len(tracker.Artifacts))
 	}

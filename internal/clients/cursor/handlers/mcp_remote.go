@@ -89,3 +89,19 @@ func (h *MCPRemoteHandler) generateMCPEntry() map[string]interface{} {
 
 	return entry
 }
+
+// VerifyInstalled checks if the MCP remote server is registered in mcp.json
+func (h *MCPRemoteHandler) VerifyInstalled(targetBase string) (bool, string) {
+	mcpConfigPath := filepath.Join(targetBase, "mcp.json")
+
+	config, err := ReadMCPConfig(mcpConfigPath)
+	if err != nil {
+		return false, "failed to read mcp.json: " + err.Error()
+	}
+
+	if _, exists := config.MCPServers[h.metadata.Artifact.Name]; !exists {
+		return false, "MCP remote server not registered"
+	}
+
+	return true, "installed"
+}

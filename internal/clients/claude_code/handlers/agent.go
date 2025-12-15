@@ -3,13 +3,15 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/sleuth-io/skills/internal/artifact"
+	"github.com/sleuth-io/skills/internal/handlers/dirartifact"
 	"github.com/sleuth-io/skills/internal/metadata"
 	"github.com/sleuth-io/skills/internal/utils"
 )
+
+var agentOps = dirartifact.NewOperations("agents", &artifact.TypeAgent)
 
 // AgentHandler handles agent artifact installation
 type AgentHandler struct {
@@ -93,43 +95,12 @@ func (h *AgentHandler) Install(ctx context.Context, zipData []byte, targetBase s
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Determine installation path
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
-	// Remove existing installation if present
-	if utils.IsDirectory(installPath) {
-		if err := os.RemoveAll(installPath); err != nil {
-			return fmt.Errorf("failed to remove existing installation: %w", err)
-		}
-	}
-
-	// Create installation directory
-	if err := utils.EnsureDir(installPath); err != nil {
-		return fmt.Errorf("failed to create installation directory: %w", err)
-	}
-
-	// Extract zip to installation directory
-	if err := utils.ExtractZip(zipData, installPath); err != nil {
-		return fmt.Errorf("failed to extract zip: %w", err)
-	}
-
-	return nil
+	return agentOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name)
 }
 
 // Remove uninstalls the agent artifact
 func (h *AgentHandler) Remove(ctx context.Context, targetBase string) error {
-	installPath := filepath.Join(targetBase, h.GetInstallPath())
-
-	if !utils.IsDirectory(installPath) {
-		// Already removed or never installed
-		return nil
-	}
-
-	if err := os.RemoveAll(installPath); err != nil {
-		return fmt.Errorf("failed to remove agent: %w", err)
-	}
-
-	return nil
+	return agentOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
@@ -186,4 +157,9 @@ func (h *AgentHandler) Validate(zipData []byte) error {
 // CanDetectInstalledState returns true since agents preserve metadata.toml
 func (h *AgentHandler) CanDetectInstalledState() bool {
 	return true
+}
+
+// VerifyInstalled checks if the agent is properly installed
+func (h *AgentHandler) VerifyInstalled(targetBase string) (bool, string) {
+	return agentOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
 }

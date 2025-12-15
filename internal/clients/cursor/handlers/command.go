@@ -70,3 +70,13 @@ func (h *CommandHandler) getPromptFile() string {
 	}
 	return ""
 }
+
+// VerifyInstalled checks if the command is properly installed
+func (h *CommandHandler) VerifyInstalled(targetBase string) (bool, string) {
+	commandFile := filepath.Join(targetBase, "commands", h.metadata.Artifact.Name+".md")
+	if !utils.FileExists(commandFile) {
+		return false, "command file not found"
+	}
+	// Cursor commands don't have version tracking
+	return true, "installed"
+}

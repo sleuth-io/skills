@@ -197,7 +197,7 @@ func promptRunInstall(cmd *cobra.Command, ctx context.Context, out *outputHelper
 	}
 
 	out.println()
-	if err := runInstall(cmd, nil, false, ""); err != nil {
+	if err := runInstall(cmd, nil, false, "", false); err != nil {
 		out.printfErr("Install failed: %v\n", err)
 	}
 }

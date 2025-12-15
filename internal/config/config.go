@@ -130,8 +130,8 @@ func (c *Config) Validate() error {
 
 	switch c.Type {
 	case RepositoryTypeSleuth:
-		if c.ServerURL == "" {
-			return fmt.Errorf("serverUrl is required for sleuth repository type")
+		if c.RepositoryURL == "" && c.ServerURL == "" {
+			return fmt.Errorf("repositoryUrl is required for sleuth repository type")
 		}
 		if c.AuthToken == "" {
 			return fmt.Errorf("authToken is required for sleuth repository type")
@@ -155,9 +155,13 @@ func (c *Config) GetType() string {
 }
 
 // GetServerURL returns the Sleuth server URL, with environment override
+// For backwards compatibility, falls back to ServerURL if RepositoryURL is empty
 func (c *Config) GetServerURL() string {
 	if envURL := os.Getenv("SLEUTH_SERVER_URL"); envURL != "" {
 		return envURL
+	}
+	if c.RepositoryURL != "" {
+		return c.RepositoryURL
 	}
 	return c.ServerURL
 }

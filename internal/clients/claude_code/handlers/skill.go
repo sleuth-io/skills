@@ -159,6 +159,11 @@ func (h *SkillHandler) CanDetectInstalledState() bool {
 	return true
 }
 
+// VerifyInstalled checks if the skill is properly installed
+func (h *SkillHandler) VerifyInstalled(targetBase string) (bool, string) {
+	return skillOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+}
+
 // containsFile checks if a file exists in the file list
 func containsFile(files []string, filename string) bool {
 	for _, f := range files {

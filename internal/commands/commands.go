@@ -15,7 +15,7 @@ func RunDefaultCommand(cmd *cobra.Command, args []string) error {
 	// Check if skill.lock exists in current directory
 	if _, err := os.Stat(constants.SkillLockFile); err == nil {
 		// Lock file exists, run install (not in hook mode, no specific client)
-		return runInstall(cmd, args, false, "")
+		return runInstall(cmd, args, false, "", false)
 	}
 
 	// No lock file, show help

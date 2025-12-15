@@ -10,6 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sleuth-io/skills/internal/clients"
+	"github.com/sleuth-io/skills/internal/lockfile"
 )
 
 // mockClient implements clients.Client for testing
@@ -68,6 +69,10 @@ func (m *mockClient) UninstallHooks(ctx context.Context) error {
 
 func (m *mockClient) ShouldInstall(ctx context.Context) (bool, error) {
 	return true, nil
+}
+
+func (m *mockClient) VerifyArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, scope *clients.InstallScope) []clients.VerifyResult {
+	return nil
 }
 
 func (m *mockClient) addSkill(name, description, version, content, baseDir string) {

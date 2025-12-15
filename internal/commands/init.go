@@ -229,9 +229,9 @@ func authenticateSleuth(cmd *cobra.Command, ctx context.Context, serverURL strin
 
 	// Save configuration
 	cfg := &config.Config{
-		Type:      config.RepositoryTypeSleuth,
-		ServerURL: serverURL,
-		AuthToken: tokenResp.AccessToken,
+		Type:          config.RepositoryTypeSleuth,
+		RepositoryURL: serverURL,
+		AuthToken:     tokenResp.AccessToken,
 	}
 
 	if err := config.Save(cfg); err != nil {

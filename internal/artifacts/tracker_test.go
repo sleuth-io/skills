@@ -2,80 +2,198 @@ package artifacts
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestGetTrackerPath(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
+	got, err := GetTrackerPath()
 	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
+		t.Fatalf("GetTrackerPath() error = %v", err)
 	}
 
-	claudeDir := filepath.Join(homeDir, ".claude")
+	// Verify it's in the cache directory
+	if !strings.Contains(got, ".cache/skills/installed.json") {
+		t.Errorf("GetTrackerPath() = %q, want path containing '.cache/skills/installed.json'", got)
+	}
 
+	// Verify it ends with .json
+	if !strings.HasSuffix(got, ".json") {
+		t.Errorf("GetTrackerPath() = %q, want path ending with .json", got)
+	}
+}
+
+func TestTrackerOperations(t *testing.T) {
+	// Create a temp directory and override cache for testing
+	tmpDir, err := os.MkdirTemp("", "tracker-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test loading empty tracker
+	tracker, err := LoadTracker()
+	if err != nil {
+		t.Fatalf("LoadTracker() error = %v", err)
+	}
+	if len(tracker.Artifacts) != 0 {
+		t.Errorf("Expected empty tracker, got %d artifacts", len(tracker.Artifacts))
+	}
+
+	// Test upserting artifact
+	artifact := InstalledArtifact{
+		Name:       "test-skill",
+		Version:    "1.0.0",
+		Repository: "",
+		Path:       "",
+		Clients:    []string{"claude-code"},
+	}
+	tracker.UpsertArtifact(artifact)
+
+	if len(tracker.Artifacts) != 1 {
+		t.Errorf("Expected 1 artifact after upsert, got %d", len(tracker.Artifacts))
+	}
+
+	// Test find artifact
+	key := ArtifactKey{Name: "test-skill", Repository: "", Path: ""}
+	found := tracker.FindArtifact(key)
+	if found == nil {
+		t.Errorf("FindArtifact() returned nil, expected artifact")
+	} else if found.Version != "1.0.0" {
+		t.Errorf("FindArtifact() version = %s, want 1.0.0", found.Version)
+	}
+
+	// Test IsGlobal
+	if !found.IsGlobal() {
+		t.Errorf("IsGlobal() = false, want true")
+	}
+
+	// Test scope description
+	if found.ScopeDescription() != "Global" {
+		t.Errorf("ScopeDescription() = %s, want 'Global'", found.ScopeDescription())
+	}
+
+	// Test repo-scoped artifact
+	repoArtifact := InstalledArtifact{
+		Name:       "repo-skill",
+		Version:    "2.0.0",
+		Repository: "git@github.com:org/repo.git",
+		Path:       "",
+		Clients:    []string{"cursor"},
+	}
+	tracker.UpsertArtifact(repoArtifact)
+
+	repoKey := ArtifactKey{Name: "repo-skill", Repository: "git@github.com:org/repo.git", Path: ""}
+	foundRepo := tracker.FindArtifact(repoKey)
+	if foundRepo == nil {
+		t.Errorf("FindArtifact() for repo artifact returned nil")
+	} else {
+		if foundRepo.IsGlobal() {
+			t.Errorf("IsGlobal() = true for repo-scoped artifact, want false")
+		}
+		if foundRepo.ScopeDescription() != "git@github.com:org/repo.git" {
+			t.Errorf("ScopeDescription() = %s, want repo URL", foundRepo.ScopeDescription())
+		}
+	}
+
+	// Test path-scoped artifact
+	pathArtifact := InstalledArtifact{
+		Name:       "path-skill",
+		Version:    "3.0.0",
+		Repository: "git@github.com:org/repo.git",
+		Path:       "/services/api",
+		Clients:    []string{"claude-code", "cursor"},
+	}
+	tracker.UpsertArtifact(pathArtifact)
+
+	pathKey := ArtifactKey{Name: "path-skill", Repository: "git@github.com:org/repo.git", Path: "/services/api"}
+	foundPath := tracker.FindArtifact(pathKey)
+	if foundPath == nil {
+		t.Errorf("FindArtifact() for path artifact returned nil")
+	} else {
+		if foundPath.IsGlobal() {
+			t.Errorf("IsGlobal() = true for path-scoped artifact, want false")
+		}
+		expectedDesc := "git@github.com:org/repo.git:/services/api"
+		if foundPath.ScopeDescription() != expectedDesc {
+			t.Errorf("ScopeDescription() = %s, want %s", foundPath.ScopeDescription(), expectedDesc)
+		}
+	}
+
+	// Test remove artifact
+	removed := tracker.RemoveArtifact(key)
+	if !removed {
+		t.Errorf("RemoveArtifact() = false, want true")
+	}
+	if len(tracker.Artifacts) != 2 {
+		t.Errorf("Expected 2 artifacts after remove, got %d", len(tracker.Artifacts))
+	}
+
+	// Test NeedsInstall
+	if !tracker.NeedsInstall(key, "1.0.0", []string{"claude-code"}) {
+		t.Errorf("NeedsInstall() = false for removed artifact, want true")
+	}
+	if tracker.NeedsInstall(repoKey, "2.0.0", []string{"cursor"}) {
+		t.Errorf("NeedsInstall() = true for existing artifact with same version/clients, want false")
+	}
+	if !tracker.NeedsInstall(repoKey, "2.1.0", []string{"cursor"}) {
+		t.Errorf("NeedsInstall() = false for artifact with different version, want true")
+	}
+
+	// Test GroupByScope
+	grouped := tracker.GroupByScope()
+	if len(grouped) != 2 {
+		t.Errorf("GroupByScope() returned %d groups, want 2", len(grouped))
+	}
+
+	// Test FindByScope
+	repoScoped := tracker.FindByScope("git@github.com:org/repo.git", "")
+	if len(repoScoped) != 1 {
+		t.Errorf("FindByScope() for repo returned %d artifacts, want 1", len(repoScoped))
+	}
+}
+
+func TestNewArtifactKey(t *testing.T) {
 	tests := []struct {
-		name       string
-		targetBase string
-		wantInPath string // what should be in the path
+		name      string
+		artName   string
+		scopeType string
+		repoURL   string
+		repoPath  string
+		want      ArtifactKey
 	}{
 		{
-			name:       "global installation",
-			targetBase: claudeDir,
-			wantInPath: ".cache/skills/installed-state/global.json",
+			name:      "global scope",
+			artName:   "test",
+			scopeType: "global",
+			repoURL:   "https://github.com/org/repo.git",
+			repoPath:  "/path",
+			want:      ArtifactKey{Name: "test", Repository: "", Path: ""},
 		},
 		{
-			name:       "repo-scoped installation",
-			targetBase: "/home/user/myrepo/.claude",
-			wantInPath: ".cache/skills/installed-state/",
+			name:      "repo scope",
+			artName:   "test",
+			scopeType: "repo",
+			repoURL:   "https://github.com/org/repo.git",
+			repoPath:  "/path",
+			want:      ArtifactKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: ""},
+		},
+		{
+			name:      "path scope",
+			artName:   "test",
+			scopeType: "path",
+			repoURL:   "https://github.com/org/repo.git",
+			repoPath:  "/path",
+			want:      ArtifactKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: "/path"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetTrackerPath(tt.targetBase)
-
-			// Verify it's in the cache directory
-			if !strings.Contains(got, tt.wantInPath) {
-				t.Errorf("GetTrackerPath(%q) = %q, want path containing %q", tt.targetBase, got, tt.wantInPath)
-			}
-
-			// Verify it's NOT in the targetBase directory anymore
-			if strings.HasPrefix(got, tt.targetBase) {
-				t.Errorf("GetTrackerPath(%q) = %q, should NOT be under targetBase (should be in cache)", tt.targetBase, got)
-			}
-
-			// Verify it ends with .json
-			if !strings.HasSuffix(got, ".json") {
-				t.Errorf("GetTrackerPath(%q) = %q, want path ending with .json", tt.targetBase, got)
+			got := NewArtifactKey(tt.artName, tt.scopeType, tt.repoURL, tt.repoPath)
+			if got != tt.want {
+				t.Errorf("NewArtifactKey() = %+v, want %+v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestTrackerPathGlobalVsRepoScoped(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
-
-	claudeDir := filepath.Join(homeDir, ".claude")
-	globalPath := GetTrackerPath(claudeDir)
-	repoPath := GetTrackerPath("/some/repo/.claude")
-
-	// Global and repo-scoped should have different paths
-	if globalPath == repoPath {
-		t.Errorf("Global and repo-scoped tracker paths should be different, both are: %s", globalPath)
-	}
-
-	// Global should contain "global"
-	if !strings.Contains(globalPath, "global") {
-		t.Errorf("Global tracker path should contain 'global', got: %s", globalPath)
-	}
-
-	// Repo-scoped should NOT contain "global"
-	if strings.Contains(repoPath, "global.json") {
-		t.Errorf("Repo-scoped tracker path should not contain 'global.json', got: %s", repoPath)
 	}
 }

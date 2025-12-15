@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -14,12 +13,9 @@ import (
 	"github.com/sleuth-io/skills/internal/artifacts"
 	"github.com/sleuth-io/skills/internal/artifacts/detectors"
 	"github.com/sleuth-io/skills/internal/config"
-	"github.com/sleuth-io/skills/internal/gitutil"
 	"github.com/sleuth-io/skills/internal/logger"
 	"github.com/sleuth-io/skills/internal/repository"
-	"github.com/sleuth-io/skills/internal/scope"
 	"github.com/sleuth-io/skills/internal/stats"
-	"github.com/sleuth-io/skills/internal/utils"
 )
 
 // NewReportUsageCommand creates the report-usage command
@@ -90,46 +86,8 @@ func runReportUsage(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Detect Git context to determine scope
-	ctx := context.Background()
-	gitContext, err := gitutil.DetectContext(ctx)
-	if err != nil {
-		// If we can't detect Git context, use global scope
-		gitContext = &gitutil.GitContext{}
-	}
-
-	// Determine scope from git context
-	var currentScope *scope.Scope
-	if gitContext.IsRepo {
-		if gitContext.RelativePath == "." {
-			currentScope = &scope.Scope{
-				Type:     "repo",
-				RepoURL:  gitContext.RepoURL,
-				RepoPath: "",
-			}
-		} else {
-			currentScope = &scope.Scope{
-				Type:     "path",
-				RepoURL:  gitContext.RepoURL,
-				RepoPath: gitContext.RelativePath,
-			}
-		}
-	} else {
-		currentScope = &scope.Scope{
-			Type: "global",
-		}
-	}
-
-	// Determine tracking base for this scope
-	var trackingBase string
-	if currentScope.Type == "global" {
-		trackingBase, _ = utils.GetClaudeDir()
-	} else {
-		trackingBase = filepath.Join(gitContext.RepoRoot, ".claude")
-	}
-
 	// Load tracker to check if artifact is installed
-	tracker, err := artifacts.LoadInstalledArtifacts(trackingBase)
+	tracker, err := artifacts.LoadTracker()
 	if err != nil {
 		// Tracker doesn't exist, exit silently
 		return nil

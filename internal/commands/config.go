@@ -262,40 +262,29 @@ func checkHooksInstalled(clientID, clientDir string) bool {
 }
 
 func gatherInstalledArtifacts() []ScopeArtifacts {
-	var scopes []ScopeArtifacts
-
-	trackers, err := artifacts.ListAllTrackerFiles()
-	if err != nil {
-		return scopes
+	tracker, err := artifacts.LoadTracker()
+	if err != nil || len(tracker.Artifacts) == 0 {
+		return nil
 	}
 
-	for _, tracker := range trackers {
-		installed, err := loadTrackerFile(tracker.Path)
-		if err != nil {
-			continue
-		}
+	trackerPath, _ := artifacts.GetTrackerPath()
 
-		scopeName := tracker.ScopeKey
-		if scopeName == "global" {
-			scopeName = "Global"
-		}
+	// Group artifacts by scope
+	grouped := tracker.GroupByScope()
 
+	var scopes []ScopeArtifacts
+	for scopeName, arts := range grouped {
 		scope := ScopeArtifacts{
-			Scope:           scopeName,
-			TrackerPath:     tracker.Path,
-			LockFileVersion: installed.LockFileVersion,
-			Artifacts:       []ArtifactInfo{},
+			Scope:       scopeName,
+			TrackerPath: trackerPath,
+			Artifacts:   []ArtifactInfo{},
 		}
 
-		if !installed.InstalledAt.IsZero() {
-			scope.InstalledAt = installed.InstalledAt.Format("2006-01-02 15:04:05")
-		}
-
-		for _, art := range installed.Artifacts {
+		for _, art := range arts {
 			scope.Artifacts = append(scope.Artifacts, ArtifactInfo{
 				Name:    art.Name,
 				Version: art.Version,
-				Type:    string(art.Type.Key),
+				Type:    "", // Type not stored in new tracker format
 				Clients: art.Clients,
 			})
 		}
@@ -304,20 +293,6 @@ func gatherInstalledArtifacts() []ScopeArtifacts {
 	}
 
 	return scopes
-}
-
-func loadTrackerFile(path string) (*artifacts.InstalledArtifacts, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var tracker artifacts.InstalledArtifacts
-	if err := json.Unmarshal(data, &tracker); err != nil {
-		return nil, err
-	}
-
-	return &tracker, nil
 }
 
 func gatherRecentLogs(lines int) []string {

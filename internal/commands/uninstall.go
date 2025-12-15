@@ -262,7 +262,7 @@ func loadLockFileForUninstall(ctx context.Context, out *outputHelper) (*lockfile
 }
 
 // loadTrackerForUninstall detects git context and loads the installation tracker
-func loadTrackerForUninstall(ctx context.Context, out *outputHelper) (*gitutil.GitContext, *artifacts.InstalledArtifacts, string, error) {
+func loadTrackerForUninstall(ctx context.Context, out *outputHelper) (*gitutil.GitContext, *artifacts.Tracker, string, error) {
 	gitContext, err := gitutil.DetectContext(ctx)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to detect git context: %w", err)
@@ -280,7 +280,7 @@ func loadTrackerForUninstall(ctx context.Context, out *outputHelper) (*gitutil.G
 	}
 
 	out.println("Loading installation state...")
-	tracker, err := artifacts.LoadInstalledArtifacts(trackingBase)
+	tracker, err := artifacts.LoadTracker()
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to load tracker: %w", err)
 	}
@@ -289,7 +289,7 @@ func loadTrackerForUninstall(ctx context.Context, out *outputHelper) (*gitutil.G
 }
 
 // buildUninstallPlanFromTracker creates the uninstall plan by matching tracker with lock file
-func buildUninstallPlanFromTracker(lockFile *lockfile.LockFile, tracker *artifacts.InstalledArtifacts, gitContext *gitutil.GitContext, trackingBase string) UninstallPlan {
+func buildUninstallPlanFromTracker(lockFile *lockfile.LockFile, tracker *artifacts.Tracker, gitContext *gitutil.GitContext, trackingBase string) UninstallPlan {
 	log := logger.Get()
 
 	// Build artifact lookup from lock file
@@ -308,11 +308,13 @@ func buildUninstallPlanFromTracker(lockFile *lockfile.LockFile, tracker *artifac
 		if !found {
 			// Artifact in tracker but not in lock file - still uninstall it
 			log.Warn("artifact in tracker but not in lock file", "name", installed.Name)
+			// Determine type from lock file if possible
+			artType := artifact.TypeSkill // Default to skill
 			plan.Artifacts = append(plan.Artifacts, ArtifactUninstallPlan{
 				Name:     installed.Name,
 				Version:  installed.Version,
-				Type:     installed.Type,
-				IsGlobal: true, // assume global if not in lock file
+				Type:     artType,
+				IsGlobal: installed.IsGlobal(),
 				Clients:  installed.Clients,
 			})
 			continue
@@ -321,7 +323,7 @@ func buildUninstallPlanFromTracker(lockFile *lockfile.LockFile, tracker *artifac
 		plan.Artifacts = append(plan.Artifacts, ArtifactUninstallPlan{
 			Name:      installed.Name,
 			Version:   installed.Version,
-			Type:      installed.Type,
+			Type:      lockEntry.Type,
 			IsGlobal:  lockEntry.IsGlobal(),
 			Clients:   installed.Clients,
 			LockEntry: lockEntry,
@@ -431,19 +433,27 @@ func updateTracker(results []UninstallResult, plan UninstallPlan, out *outputHel
 		return nil
 	}
 
-	tracker, err := artifacts.LoadInstalledArtifacts(plan.TargetBase)
+	tracker, err := artifacts.LoadTracker()
 	if err != nil {
 		return fmt.Errorf("failed to load tracker: %w", err)
 	}
 
-	updated := artifacts.RemoveArtifactsFromTracker(tracker, fullyRemoved)
-
-	trackerPath := artifacts.GetTrackerPath(plan.TargetBase)
-	if updated == nil || len(updated.Artifacts) == 0 {
-		return artifacts.DeleteTracker(trackerPath)
+	// Remove each fully removed artifact
+	for _, artName := range fullyRemoved {
+		// Find the artifact in tracker to get its key
+		for _, art := range tracker.Artifacts {
+			if art.Name == artName {
+				tracker.RemoveArtifact(art.Key())
+				break
+			}
+		}
 	}
 
-	return artifacts.SaveInstalledArtifacts(plan.TargetBase, updated)
+	if len(tracker.Artifacts) == 0 {
+		return artifacts.DeleteTracker()
+	}
+
+	return artifacts.SaveTracker(tracker)
 }
 
 // findFullyRemovedArtifacts returns artifacts where all client removals succeeded

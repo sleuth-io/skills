@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,7 +22,6 @@ import (
 	"github.com/sleuth-io/skills/internal/logger"
 	"github.com/sleuth-io/skills/internal/repository"
 	"github.com/sleuth-io/skills/internal/scope"
-	"github.com/sleuth-io/skills/internal/utils"
 )
 
 // NewInstallCommand creates the install command
@@ -252,35 +250,23 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	out.printf("Resolved %d artifacts (including dependencies)\n", len(sortedArtifacts))
 	out.println()
 
-	// Determine base directories
-	claudeDir, err := utils.GetClaudeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get Claude directory: %w", err)
-	}
-
-	// For cleanup and tracking, use a consistent base (repo root if in repo, otherwise global)
-	trackingBase := claudeDir
-	if gitContext.IsRepo {
-		trackingBase = filepath.Join(gitContext.RepoRoot, ".claude")
-	}
-
-	// Load previous installation state
-	previousInstall := loadPreviousInstallState(trackingBase, out)
+	// Load tracker
+	tracker := loadTracker(out)
 
 	// Determine which artifacts need to be installed (new or changed versions or missing from clients)
 	targetClientIDs := make([]string, len(targetClients))
 	for i, client := range targetClients {
 		targetClientIDs[i] = client.ID()
 	}
-	artifactsToInstall := determineArtifactsToInstall(previousInstall, sortedArtifacts, targetClientIDs, out)
+	artifactsToInstall := determineArtifactsToInstall(tracker, sortedArtifacts, currentScope, targetClientIDs, out)
 
 	// Clean up artifacts that were removed from lock file
-	cleanupRemovedArtifacts(ctx, previousInstall, sortedArtifacts, gitContext, currentScope, targetClients, out)
+	cleanupRemovedArtifacts(ctx, tracker, sortedArtifacts, gitContext, currentScope, targetClients, out)
 
 	// Early exit if nothing to install
 	if len(artifactsToInstall) == 0 {
-		// Save state even if nothing changed (updates timestamp)
-		saveInstallationState(trackingBase, lockFile, sortedArtifacts, targetClientIDs, out)
+		// Save state even if nothing changed
+		saveInstallationState(tracker, sortedArtifacts, currentScope, targetClientIDs, out)
 
 		// Install client-specific hooks (e.g., auto-update, usage tracking)
 		installClientHooks(ctx, targetClients, out)
@@ -357,7 +343,7 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	installResult := installArtifacts(ctx, successfulDownloads, gitContext, currentScope, targetClients, out)
 
 	// Save new installation state (saves ALL artifacts from lock file, not just changed ones)
-	saveInstallationState(trackingBase, lockFile, sortedArtifacts, targetClientIDs, out)
+	saveInstallationState(tracker, sortedArtifacts, currentScope, targetClientIDs, out)
 
 	// Ensure skills support is configured for all clients (creates local rules files, etc.)
 	ensureSkillsSupport(ctx, targetClients, buildInstallScope(currentScope, gitContext), out)
@@ -460,32 +446,34 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	return nil
 }
 
-// loadPreviousInstallState loads the previous installation state from tracker file
-func loadPreviousInstallState(trackingBase string, out *outputHelper) *artifacts.InstalledArtifacts {
-	previousInstall, err := artifacts.LoadInstalledArtifacts(trackingBase)
+// loadTracker loads the global tracker
+func loadTracker(out *outputHelper) *artifacts.Tracker {
+	tracker, err := artifacts.LoadTracker()
 	if err != nil {
-		out.printfErr("Warning: failed to load previous installation state: %v\n", err)
+		out.printfErr("Warning: failed to load tracker: %v\n", err)
 		log := logger.Get()
-		log.Error("failed to load previous installation state", "tracking_base", trackingBase, "error", err)
-		return &artifacts.InstalledArtifacts{
+		log.Error("failed to load tracker", "error", err)
+		return &artifacts.Tracker{
 			Version:   artifacts.TrackerFormatVersion,
 			Artifacts: []artifacts.InstalledArtifact{},
 		}
 	}
-	return previousInstall
+	return tracker
 }
 
 // determineArtifactsToInstall finds which artifacts need to be installed (new or changed)
-func determineArtifactsToInstall(previousInstall *artifacts.InstalledArtifacts, sortedArtifacts []*lockfile.Artifact, targetClientIDs []string, out *outputHelper) []*lockfile.Artifact {
+func determineArtifactsToInstall(tracker *artifacts.Tracker, sortedArtifacts []*lockfile.Artifact, currentScope *scope.Scope, targetClientIDs []string, out *outputHelper) []*lockfile.Artifact {
 	log := logger.Get()
-	artifactsToInstall := artifacts.FindArtifactsToInstallForClients(previousInstall, sortedArtifacts, targetClientIDs)
 
-	// Log version updates
-	for _, artifact := range artifactsToInstall {
-		for _, prev := range previousInstall.Artifacts {
-			if prev.Name == artifact.Name && prev.Version != artifact.Version {
-				log.Info("artifact version update", "name", artifact.Name, "old_version", prev.Version, "new_version", artifact.Version)
+	var artifactsToInstall []*lockfile.Artifact
+	for _, art := range sortedArtifacts {
+		key := artifacts.NewArtifactKey(art.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+		if tracker.NeedsInstall(key, art.Version, targetClientIDs) {
+			// Check for version updates and log them
+			if existing := tracker.FindArtifact(key); existing != nil && existing.Version != art.Version {
+				log.Info("artifact version update", "name", art.Name, "old_version", existing.Version, "new_version", art.Version)
 			}
+			artifactsToInstall = append(artifactsToInstall, art)
 		}
 	}
 
@@ -503,8 +491,23 @@ func determineArtifactsToInstall(previousInstall *artifacts.InstalledArtifacts, 
 }
 
 // cleanupRemovedArtifacts removes artifacts that are no longer in the lock file from all clients
-func cleanupRemovedArtifacts(ctx context.Context, previousInstall *artifacts.InstalledArtifacts, sortedArtifacts []*lockfile.Artifact, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) {
-	removedArtifacts := artifacts.FindRemovedArtifacts(previousInstall, sortedArtifacts)
+func cleanupRemovedArtifacts(ctx context.Context, tracker *artifacts.Tracker, sortedArtifacts []*lockfile.Artifact, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) {
+	// Find artifacts in tracker for this scope that are no longer in lock file
+	key := artifacts.NewArtifactKey("", currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+	currentInScope := tracker.FindByScope(key.Repository, key.Path)
+
+	lockFileNames := make(map[string]bool)
+	for _, art := range sortedArtifacts {
+		lockFileNames[art.Name] = true
+	}
+
+	var removedArtifacts []artifacts.InstalledArtifact
+	for _, installed := range currentInScope {
+		if !lockFileNames[installed.Name] {
+			removedArtifacts = append(removedArtifacts, installed)
+		}
+	}
+
 	if len(removedArtifacts) == 0 {
 		return
 	}
@@ -520,7 +523,6 @@ func cleanupRemovedArtifacts(ctx context.Context, previousInstall *artifacts.Ins
 		artifactsToRemove[i] = artifact.Artifact{
 			Name:    installed.Name,
 			Version: installed.Version,
-			Type:    installed.Type,
 		}
 	}
 
@@ -550,6 +552,11 @@ func cleanupRemovedArtifacts(ctx context.Context, previousInstall *artifacts.Ins
 				log.Error("artifact removal failed", "name", result.ArtifactName, "client", client.ID(), "error", result.Error)
 			}
 		}
+	}
+
+	// Remove from tracker
+	for _, removed := range removedArtifacts {
+		tracker.RemoveArtifact(removed.Key())
 	}
 }
 
@@ -669,27 +676,21 @@ func ensureSkillsSupport(ctx context.Context, targetClients []clients.Client, sc
 }
 
 // saveInstallationState saves the current installation state to tracker file
-func saveInstallationState(trackingBase string, lockFile *lockfile.LockFile, sortedArtifacts []*lockfile.Artifact, targetClientIDs []string, out *outputHelper) {
-	newInstall := &artifacts.InstalledArtifacts{
-		Version:         artifacts.TrackerFormatVersion,
-		LockFileVersion: lockFile.Version,
-		InstalledAt:     time.Now(),
-		Artifacts:       []artifacts.InstalledArtifact{},
-	}
-
-	for _, artifact := range sortedArtifacts {
-		newInstall.Artifacts = append(newInstall.Artifacts, artifacts.InstalledArtifact{
-			Name:    artifact.Name,
-			Version: artifact.Version,
-			Type:    artifact.Type,
-			Clients: targetClientIDs, // Track which clients this was installed to
-			// InstallPath will be populated in future enhancement
+func saveInstallationState(tracker *artifacts.Tracker, sortedArtifacts []*lockfile.Artifact, currentScope *scope.Scope, targetClientIDs []string, out *outputHelper) {
+	for _, art := range sortedArtifacts {
+		key := artifacts.NewArtifactKey(art.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+		tracker.UpsertArtifact(artifacts.InstalledArtifact{
+			Name:       art.Name,
+			Version:    art.Version,
+			Repository: key.Repository,
+			Path:       key.Path,
+			Clients:    targetClientIDs,
 		})
 	}
 
-	if err := artifacts.SaveInstalledArtifacts(trackingBase, newInstall); err != nil {
+	if err := artifacts.SaveTracker(tracker); err != nil {
 		out.printfErr("Warning: failed to save installation state: %v\n", err)
 		log := logger.Get()
-		log.Error("failed to save installation state", "tracking_base", trackingBase, "error", err)
+		log.Error("failed to save tracker", "error", err)
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/sleuth-io/skills/internal/utils"
 )
 
-// PathSourceHandler handles artifacts with source-path
+// PathSourceHandler handles assets with source-path
 type PathSourceHandler struct {
 	lockFileDir string // Directory containing the lock file for relative path resolution
 }
@@ -22,13 +22,13 @@ func NewPathSourceHandler(lockFileDir string) *PathSourceHandler {
 	}
 }
 
-// Fetch reads an artifact from a local file path
-func (p *PathSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifact) ([]byte, error) {
-	if artifact.SourcePath == nil {
-		return nil, fmt.Errorf("artifact does not have source-path")
+// Fetch reads an asset from a local file path
+func (p *PathSourceHandler) Fetch(ctx context.Context, asset *lockfile.Asset) ([]byte, error) {
+	if asset.SourcePath == nil {
+		return nil, fmt.Errorf("asset does not have source-path")
 	}
 
-	source := artifact.SourcePath
+	source := asset.SourcePath
 	path := source.Path
 
 	// Resolve path based on type

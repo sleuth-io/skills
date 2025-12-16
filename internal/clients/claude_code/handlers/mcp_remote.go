@@ -13,8 +13,8 @@ import (
 	"github.com/sleuth-io/skills/internal/utils"
 )
 
-// MCPRemoteHandler handles MCP remote artifact installation
-// MCP remote artifacts contain only configuration, no server code
+// MCPRemoteHandler handles MCP remote asset installation
+// MCP remote assets contain only configuration, no server code
 type MCPRemoteHandler struct {
 	metadata *metadata.Metadata
 }
@@ -58,7 +58,7 @@ func (h *MCPRemoteHandler) GetInstallPath() string {
 	return "" // No files installed
 }
 
-// Validate checks if the zip structure is valid for an MCP remote artifact
+// Validate checks if the zip structure is valid for an MCP remote asset
 func (h *MCPRemoteHandler) Validate(zipData []byte) error {
 	// List files in zip
 	files, err := utils.ListZipFiles(zipData)
@@ -87,9 +87,9 @@ func (h *MCPRemoteHandler) Validate(zipData []byte) error {
 		return fmt.Errorf("metadata validation failed: %w", err)
 	}
 
-	// Verify artifact type matches
-	if meta.Artifact.Type != asset.TypeMCPRemote {
-		return fmt.Errorf("artifact type mismatch: expected mcp-remote, got %s", meta.Artifact.Type)
+	// Verify asset type matches
+	if meta.Asset.Type != asset.TypeMCPRemote {
+		return fmt.Errorf("asset type mismatch: expected mcp-remote, got %s", meta.Asset.Type)
 	}
 
 	// Check that MCP config exists
@@ -130,7 +130,7 @@ func (h *MCPRemoteHandler) updateMCPConfig(targetBase string) error {
 	serverConfig := h.buildMCPServerConfig()
 
 	// Add/update MCP server entry
-	mcpServers[h.metadata.Artifact.Name] = serverConfig
+	mcpServers[h.metadata.Asset.Name] = serverConfig
 
 	// Write updated config
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -171,7 +171,7 @@ func (h *MCPRemoteHandler) removeFromMCPConfig(targetBase string) error {
 	mcpServers := config["mcpServers"].(map[string]interface{})
 
 	// Remove this MCP server
-	delete(mcpServers, h.metadata.Artifact.Name)
+	delete(mcpServers, h.metadata.Asset.Name)
 
 	// Write updated config
 	data, err = json.MarshalIndent(config, "", "  ")
@@ -200,7 +200,7 @@ func (h *MCPRemoteHandler) buildMCPServerConfig() map[string]interface{} {
 	config := map[string]interface{}{
 		"command":   mcpConfig.Command,
 		"args":      args,
-		"_artifact": h.metadata.Artifact.Name,
+		"_artifact": h.metadata.Asset.Name,
 	}
 
 	// Add optional fields
@@ -242,7 +242,7 @@ func (h *MCPRemoteHandler) VerifyInstalled(targetBase string) (bool, string) {
 		return false, "mcpServers section not found"
 	}
 
-	if _, exists := mcpServers[h.metadata.Artifact.Name]; !exists {
+	if _, exists := mcpServers[h.metadata.Asset.Name]; !exists {
 		return false, "MCP remote server not registered"
 	}
 

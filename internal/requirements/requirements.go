@@ -15,7 +15,7 @@ type Requirement struct {
 	// Type of requirement
 	Type RequirementType
 
-	// For registry artifacts
+	// For registry assets
 	Name            string
 	VersionSpec     string
 	VersionOperator string // ==, >=, >, <=, <, ~=
@@ -107,7 +107,7 @@ func ParseLine(line string) (Requirement, error) {
 		}, nil
 	}
 
-	// Registry artifact: name[version-spec]
+	// Registry asset: name[version-spec]
 	return parseRegistryRequirement(line)
 }
 

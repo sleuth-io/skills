@@ -11,10 +11,10 @@ import (
 
 // Metadata represents the complete metadata.toml structure
 type Metadata struct {
-	MetadataVersion string   `toml:"metadata-version,omitempty"`
-	Artifact        Artifact `toml:"artifact"`
+	MetadataVersion string `toml:"metadata-version,omitempty"`
+	Asset           Asset  `toml:"asset"`
 
-	// Type-specific sections (only one should be present based on artifact.type)
+	// Type-specific sections (only one should be present based on asset.type)
 	Skill   *SkillConfig           `toml:"skill,omitempty"`
 	Command *CommandConfig         `toml:"command,omitempty"`
 	Agent   *AgentConfig           `toml:"agent,omitempty"`
@@ -23,20 +23,20 @@ type Metadata struct {
 	Custom  map[string]interface{} `toml:"custom,omitempty"`
 }
 
-// Artifact represents the [artifact] section
-type Artifact struct {
-	Name          string        `toml:"name"`
-	Version       string        `toml:"version"`
+// Asset represents the [asset] section (formerly [artifact])
+type Asset struct {
+	Name          string     `toml:"name"`
+	Version       string     `toml:"version"`
 	Type          asset.Type `toml:"type"`
-	Description   string        `toml:"description,omitempty"`
-	License       string        `toml:"license,omitempty"`
-	Authors       []string      `toml:"authors,omitempty"`
-	Keywords      []string      `toml:"keywords,omitempty"`
-	Homepage      string        `toml:"homepage,omitempty"`
-	Repository    string        `toml:"repository,omitempty"`
-	Documentation string        `toml:"documentation,omitempty"`
-	Readme        string        `toml:"readme,omitempty"`
-	Dependencies  []string      `toml:"dependencies,omitempty"`
+	Description   string     `toml:"description,omitempty"`
+	License       string     `toml:"license,omitempty"`
+	Authors       []string   `toml:"authors,omitempty"`
+	Keywords      []string   `toml:"keywords,omitempty"`
+	Homepage      string     `toml:"homepage,omitempty"`
+	Repository    string     `toml:"repository,omitempty"`
+	Documentation string     `toml:"documentation,omitempty"`
+	Readme        string     `toml:"readme,omitempty"`
+	Dependencies  []string   `toml:"dependencies,omitempty"`
 }
 
 // SkillConfig represents the [skill] section
@@ -80,12 +80,28 @@ type MCPConfig struct {
 	Capabilities []string          `toml:"capabilities,omitempty"`
 }
 
+// metadataCompat is used for parsing old-style metadata with [artifact] section
+type metadataCompat struct {
+	MetadataVersion string `toml:"metadata-version,omitempty"`
+	Artifact        Asset  `toml:"artifact"` // Old name for backwards compatibility
+}
+
 // Parse parses metadata from bytes
+// Supports both new [asset] and old [artifact] section names
 func Parse(data []byte) (*Metadata, error) {
 	var metadata Metadata
 
 	if err := toml.Unmarshal(data, &metadata); err != nil {
 		return nil, fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	// Check if we got data from [asset] section
+	if metadata.Asset.Name == "" {
+		// Try parsing with old [artifact] section name
+		var compat metadataCompat
+		if err := toml.Unmarshal(data, &compat); err == nil && compat.Artifact.Name != "" {
+			metadata.Asset = compat.Artifact
+		}
 	}
 
 	return &metadata, nil
@@ -129,7 +145,7 @@ func Write(metadata *Metadata, filePath string) error {
 
 // GetTypeConfig returns the type-specific configuration section
 func (m *Metadata) GetTypeConfig() interface{} {
-	switch m.Artifact.Type {
+	switch m.Asset.Type {
 	case asset.TypeSkill:
 		return m.Skill
 	case asset.TypeCommand:

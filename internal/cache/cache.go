@@ -61,13 +61,19 @@ func getFallbackCacheDir() (string, error) {
 	}
 }
 
-// GetArtifactCacheDir returns the directory for caching artifacts
-func GetArtifactCacheDir() (string, error) {
+// GetAssetCacheDir returns the directory for caching assets
+func GetAssetCacheDir() (string, error) {
 	cacheDir, err := GetCacheDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(cacheDir, "artifacts"), nil
+	return filepath.Join(cacheDir, "assets"), nil
+}
+
+// GetArtifactCacheDir is an alias for GetAssetCacheDir for backwards compatibility
+// Deprecated: use GetAssetCacheDir instead
+func GetArtifactCacheDir() (string, error) {
+	return GetAssetCacheDir()
 }
 
 // GetGitReposCacheDir returns the directory for caching git repositories
@@ -92,7 +98,7 @@ func GetLockFileCacheDir() (string, error) {
 func EnsureCacheDirs() error {
 	dirs := []func() (string, error){
 		GetCacheDir,
-		GetArtifactCacheDir,
+		GetAssetCacheDir,
 		GetGitReposCacheDir,
 		GetLockFileCacheDir,
 	}
@@ -110,15 +116,15 @@ func EnsureCacheDirs() error {
 	return nil
 }
 
-// GetArtifactCachePath returns the cache path for a specific artifact
-func GetArtifactCachePath(name, version string) (string, error) {
-	artifactCacheDir, err := GetArtifactCacheDir()
+// GetAssetCachePath returns the cache path for a specific asset
+func GetAssetCachePath(name, version string) (string, error) {
+	assetCacheDir, err := GetAssetCacheDir()
 	if err != nil {
 		return "", err
 	}
 	// Use sanitized name for directory safety
 	safeName := filepath.Base(filepath.Clean(name))
-	return filepath.Join(artifactCacheDir, safeName, version+".zip"), nil
+	return filepath.Join(assetCacheDir, safeName, version+".zip"), nil
 }
 
 // GetGitRepoCachePath returns the cache path for a git repository
@@ -131,13 +137,13 @@ func GetGitRepoCachePath(repoURL string) (string, error) {
 	return filepath.Join(gitReposDir, urlHash), nil
 }
 
-// ClearArtifactCache removes cached artifacts for cleanup
-func ClearArtifactCache() error {
-	artifactCacheDir, err := GetArtifactCacheDir()
+// ClearAssetCache removes cached assets for cleanup
+func ClearAssetCache() error {
+	assetCacheDir, err := GetAssetCacheDir()
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(artifactCacheDir)
+	return os.RemoveAll(assetCacheDir)
 }
 
 // ETagCache stores ETags for lock files
@@ -248,7 +254,7 @@ func LoadLockFile(repoURL string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// GetTrackerCacheDir returns the directory for tracking installed artifacts state
+// GetTrackerCacheDir returns the directory for tracking installed assets state
 func GetTrackerCacheDir() (string, error) {
 	cacheDir, err := GetCacheDir()
 	if err != nil {
@@ -257,7 +263,7 @@ func GetTrackerCacheDir() (string, error) {
 	return filepath.Join(cacheDir, "installed-state"), nil
 }
 
-// GetTrackerCachePath returns the path for tracking installed artifacts
+// GetTrackerCachePath returns the path for tracking installed assets
 // scopeKey should be "global" or a hash/identifier for repo-scoped installs
 func GetTrackerCachePath(scopeKey string) (string, error) {
 	trackerDir, err := GetTrackerCacheDir()
@@ -267,9 +273,9 @@ func GetTrackerCachePath(scopeKey string) (string, error) {
 	return filepath.Join(trackerDir, scopeKey+".json"), nil
 }
 
-// SaveArtifactToDisk caches an artifact zip to disk
-func SaveArtifactToDisk(name, version string, data []byte) error {
-	cachePath, err := GetArtifactCachePath(name, version)
+// SaveAssetToDisk caches an asset zip to disk
+func SaveAssetToDisk(name, version string, data []byte) error {
+	cachePath, err := GetAssetCachePath(name, version)
 	if err != nil {
 		return err
 	}
@@ -287,9 +293,9 @@ func SaveArtifactToDisk(name, version string, data []byte) error {
 	return os.WriteFile(cachePath, data, 0644)
 }
 
-// LoadArtifactFromDisk loads a cached artifact from disk
-func LoadArtifactFromDisk(name, version string) ([]byte, error) {
-	cachePath, err := GetArtifactCachePath(name, version)
+// LoadAssetFromDisk loads a cached asset from disk
+func LoadAssetFromDisk(name, version string) ([]byte, error) {
+	cachePath, err := GetAssetCachePath(name, version)
 	if err != nil {
 		return nil, err
 	}

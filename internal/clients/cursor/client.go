@@ -66,10 +66,10 @@ func (c *Client) GetVersion() string {
 	return ""
 }
 
-// InstallArtifacts installs artifacts to Cursor using client-specific handlers
-func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallRequest) (clients.InstallResponse, error) {
+// InstallAssets installs assets to Cursor using client-specific handlers
+func (c *Client) InstallAssets(ctx context.Context, req clients.InstallRequest) (clients.InstallResponse, error) {
 	resp := clients.InstallResponse{
-		Results: make([]clients.ArtifactResult, 0, len(req.Artifacts)),
+		Results: make([]clients.AssetResult, 0, len(req.Assets)),
 	}
 
 	// Determine target directory based on scope
@@ -80,14 +80,14 @@ func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallReques
 		return resp, fmt.Errorf("failed to create target directory: %w", err)
 	}
 
-	// Install each artifact using appropriate handler
-	for _, bundle := range req.Artifacts {
-		result := clients.ArtifactResult{
-			ArtifactName: bundle.Artifact.Name,
+	// Install each asset using appropriate handler
+	for _, bundle := range req.Assets {
+		result := clients.AssetResult{
+			AssetName: bundle.Asset.Name,
 		}
 
 		var err error
-		switch bundle.Metadata.Artifact.Type {
+		switch bundle.Metadata.Asset.Type {
 		case asset.TypeMCP:
 			handler := handlers.NewMCPHandler(bundle.Metadata)
 			err = handler.Install(ctx, bundle.ZipData, targetBase)
@@ -106,7 +106,7 @@ func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallReques
 			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		default:
 			result.Status = clients.StatusSkipped
-			result.Message = fmt.Sprintf("Unsupported artifact type: %s", bundle.Metadata.Artifact.Type.Key)
+			result.Message = fmt.Sprintf("Unsupported asset type: %s", bundle.Metadata.Asset.Type.Key)
 			resp.Results = append(resp.Results, result)
 			continue
 		}
@@ -124,34 +124,34 @@ func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallReques
 	}
 
 	// Note: Skills support (rules file, MCP server) is configured by EnsureSkillsSupport
-	// which is called by the install command after all artifacts are installed
+	// which is called by the install command after all assets are installed
 
 	return resp, nil
 }
 
-// UninstallArtifacts removes artifacts from Cursor
-func (c *Client) UninstallArtifacts(ctx context.Context, req clients.UninstallRequest) (clients.UninstallResponse, error) {
+// UninstallAssets removes assets from Cursor
+func (c *Client) UninstallAssets(ctx context.Context, req clients.UninstallRequest) (clients.UninstallResponse, error) {
 	resp := clients.UninstallResponse{
-		Results: make([]clients.ArtifactResult, 0, len(req.Artifacts)),
+		Results: make([]clients.AssetResult, 0, len(req.Assets)),
 	}
 
 	targetBase := c.determineTargetBase(req.Scope)
 
-	for _, art := range req.Artifacts {
-		result := clients.ArtifactResult{
-			ArtifactName: art.Name,
+	for _, a := range req.Assets {
+		result := clients.AssetResult{
+			AssetName: a.Name,
 		}
 
 		// Create minimal metadata for removal
 		meta := &metadata.Metadata{
-			Artifact: metadata.Artifact{
-				Name: art.Name,
-				Type: art.Type,
+			Asset: metadata.Asset{
+				Name: a.Name,
+				Type: a.Type,
 			},
 		}
 
 		var err error
-		switch art.Type {
+		switch a.Type {
 		case asset.TypeMCP, asset.TypeMCPRemote:
 			handler := handlers.NewMCPHandler(meta)
 			err = handler.Remove(ctx, targetBase)
@@ -166,7 +166,7 @@ func (c *Client) UninstallArtifacts(ctx context.Context, req clients.UninstallRe
 			err = handler.Remove(ctx, targetBase)
 		default:
 			result.Status = clients.StatusSkipped
-			result.Message = fmt.Sprintf("Unsupported artifact type: %s", art.Type.Key)
+			result.Message = fmt.Sprintf("Unsupported asset type: %s", a.Type.Key)
 			resp.Results = append(resp.Results, result)
 			continue
 		}
@@ -201,12 +201,12 @@ func (c *Client) determineTargetBase(scope *clients.InstallScope) string {
 	}
 }
 
-// EnsureSkillsSupport ensures skills infrastructure is set up for the current context.
+// EnsureAssetSupport ensures asset infrastructure is set up for the current context.
 // This scans skills from all applicable scopes (global, repo, path) and creates
 // a local .cursor/rules/skills.md file listing all available skills.
-// This must be called even when no new skills are installed, to ensure the
+// This must be called even when no new assets are installed, to ensure the
 // local rules file exists (Cursor doesn't load global rules).
-func (c *Client) EnsureSkillsSupport(ctx context.Context, scope *clients.InstallScope) error {
+func (c *Client) EnsureAssetSupport(ctx context.Context, scope *clients.InstallScope) error {
 	log := logger.Get()
 
 	// 1. Register skills MCP server globally (idempotent)
@@ -395,8 +395,8 @@ func (c *Client) registerSkillsMCPServer() error {
 	return handlers.WriteMCPConfig(mcpConfigPath, config)
 }
 
-// ListSkills returns all installed skills for a given scope
-func (c *Client) ListSkills(ctx context.Context, scope *clients.InstallScope) ([]clients.InstalledSkill, error) {
+// ListAssets returns all installed skills for a given scope
+func (c *Client) ListAssets(ctx context.Context, scope *clients.InstallScope) ([]clients.InstalledSkill, error) {
 	targetBase := c.determineTargetBase(scope)
 
 	installed, err := skillOps.ScanInstalled(targetBase)
@@ -664,21 +664,21 @@ func (c *Client) installBeforeSubmitPromptHook() error {
 	return nil
 }
 
-// VerifyArtifacts checks if artifacts are actually installed on the filesystem
-func (c *Client) VerifyArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, scope *clients.InstallScope) []clients.VerifyResult {
+// VerifyAssets checks if assets are actually installed on the filesystem
+func (c *Client) VerifyAssets(ctx context.Context, assets []*lockfile.Asset, scope *clients.InstallScope) []clients.VerifyResult {
 	targetBase := c.determineTargetBase(scope)
-	results := make([]clients.VerifyResult, 0, len(artifacts))
+	results := make([]clients.VerifyResult, 0, len(assets))
 
-	for _, art := range artifacts {
+	for _, a := range assets {
 		result := clients.VerifyResult{
-			Artifact: art,
+			Asset: a,
 		}
 
-		handler, err := handlers.NewHandler(art.Type, &metadata.Metadata{
-			Artifact: metadata.Artifact{
-				Name:    art.Name,
-				Version: art.Version,
-				Type:    art.Type,
+		handler, err := handlers.NewHandler(a.Type, &metadata.Metadata{
+			Asset: metadata.Asset{
+				Name:    a.Name,
+				Version: a.Version,
+				Type:    a.Type,
 			},
 		})
 		if err != nil {

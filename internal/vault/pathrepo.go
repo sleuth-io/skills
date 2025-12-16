@@ -90,58 +90,58 @@ func (p *PathVault) GetLockFile(ctx context.Context, cachedETag string) (content
 	return data, "", false, nil
 }
 
-// GetArtifact downloads an artifact using its source configuration
+// GetAsset downloads an asset using its source configuration
 // Reuses the same dispatch pattern as GitRepository and SleuthRepository
-func (p *PathVault) GetArtifact(ctx context.Context, artifact *lockfile.Artifact) ([]byte, error) {
-	// Dispatch to appropriate source handler based on artifact source type
-	switch artifact.GetSourceType() {
+func (p *PathVault) GetAsset(ctx context.Context, asset *lockfile.Asset) ([]byte, error) {
+	// Dispatch to appropriate source handler based on asset source type
+	switch asset.GetSourceType() {
 	case "http":
-		return p.httpHandler.Fetch(ctx, artifact)
+		return p.httpHandler.Fetch(ctx, asset)
 	case "path":
-		return p.pathHandler.Fetch(ctx, artifact)
+		return p.pathHandler.Fetch(ctx, asset)
 	case "git":
-		return p.gitHandler.Fetch(ctx, artifact)
+		return p.gitHandler.Fetch(ctx, asset)
 	default:
-		return nil, fmt.Errorf("unsupported source type: %s", artifact.GetSourceType())
+		return nil, fmt.Errorf("unsupported source type: %s", asset.GetSourceType())
 	}
 }
 
-// AddArtifact adds an artifact to the local repository
+// AddAsset adds an asset to the local repository
 // Follows the same pattern as GitRepository: exploded storage + list.txt
-func (p *PathVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifact, zipData []byte) error {
-	// Create artifacts directory structure: artifacts/{name}/{version}/
-	artifactDir := filepath.Join(p.repoPath, "artifacts", artifact.Name, artifact.Version)
-	if err := os.MkdirAll(artifactDir, 0755); err != nil {
-		return fmt.Errorf("failed to create artifact directory: %w", err)
+func (p *PathVault) AddAsset(ctx context.Context, asset *lockfile.Asset, zipData []byte) error {
+	// Create assets directory structure: assets/{name}/{version}/
+	assetDir := filepath.Join(p.repoPath, "assets", asset.Name, asset.Version)
+	if err := os.MkdirAll(assetDir, 0755); err != nil {
+		return fmt.Errorf("failed to create asset directory: %w", err)
 	}
 
-	// Store artifacts exploded (not as zip) for easier browsing
+	// Store assets exploded (not as zip) for easier browsing
 	// Reuse extractZipToDir from GitRepository
-	if err := extractZipToDir(zipData, artifactDir); err != nil {
+	if err := extractZipToDir(zipData, assetDir); err != nil {
 		return fmt.Errorf("failed to extract zip to directory: %w", err)
 	}
 
 	// Update list.txt with this version
-	listPath := filepath.Join(p.repoPath, "artifacts", artifact.Name, "list.txt")
-	if err := p.updateVersionList(listPath, artifact.Version); err != nil {
+	listPath := filepath.Join(p.repoPath, "assets", asset.Name, "list.txt")
+	if err := p.updateVersionList(listPath, asset.Version); err != nil {
 		return fmt.Errorf("failed to update version list: %w", err)
 	}
 
-	// Update artifact with path source pointing to the extracted directory
-	relPath := filepath.Join("artifacts", artifact.Name, artifact.Version)
-	artifact.SourcePath = &lockfile.SourcePath{
+	// Update asset with path source pointing to the extracted directory
+	relPath := filepath.Join("assets", asset.Name, asset.Version)
+	asset.SourcePath = &lockfile.SourcePath{
 		Path: relPath,
 	}
 
 	return nil
 }
 
-// GetVersionList retrieves available versions for an artifact from list.txt
+// GetVersionList retrieves available versions for an asset from list.txt
 // Reuses the same pattern as GitRepository
 func (p *PathVault) GetVersionList(ctx context.Context, name string) ([]string, error) {
-	listPath := filepath.Join(p.repoPath, "artifacts", name, "list.txt")
+	listPath := filepath.Join(p.repoPath, "assets", name, "list.txt")
 	if _, err := os.Stat(listPath); os.IsNotExist(err) {
-		// No versions exist for this artifact
+		// No versions exist for this asset
 		return []string{}, nil
 	}
 
@@ -154,13 +154,13 @@ func (p *PathVault) GetVersionList(ctx context.Context, name string) ([]string, 
 	return parseVersionList(data), nil
 }
 
-// GetMetadata retrieves metadata for a specific artifact version
-// Not applicable for path repositories (metadata is inside the artifact)
+// GetMetadata retrieves metadata for a specific asset version
+// Not applicable for path repositories (metadata is inside the asset)
 func (p *PathVault) GetMetadata(ctx context.Context, name, version string) (*metadata.Metadata, error) {
 	return nil, fmt.Errorf("GetMetadata not supported for path repositories")
 }
 
-// VerifyIntegrity checks hashes and sizes for downloaded artifacts
+// VerifyIntegrity checks hashes and sizes for downloaded assets
 // Same as GitRepository: no verification needed for local files
 func (p *PathVault) VerifyIntegrity(data []byte, hashes map[string]string, size int64) error {
 	// For path repos, integrity is assumed since files are local

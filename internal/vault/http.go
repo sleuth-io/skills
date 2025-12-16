@@ -12,7 +12,7 @@ import (
 	"github.com/sleuth-io/skills/internal/utils"
 )
 
-// HTTPSourceHandler handles artifacts with source-http
+// HTTPSourceHandler handles assets with source-http
 type HTTPSourceHandler struct {
 	client    *http.Client
 	authToken string
@@ -28,13 +28,13 @@ func NewHTTPSourceHandler(authToken string) *HTTPSourceHandler {
 	}
 }
 
-// Fetch downloads an artifact from an HTTP URL
-func (h *HTTPSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifact) ([]byte, error) {
-	if artifact.SourceHTTP == nil {
-		return nil, fmt.Errorf("artifact does not have source-http")
+// Fetch downloads an asset from an HTTP URL
+func (h *HTTPSourceHandler) Fetch(ctx context.Context, asset *lockfile.Asset) ([]byte, error) {
+	if asset.SourceHTTP == nil {
+		return nil, fmt.Errorf("asset does not have source-http")
 	}
 
-	source := artifact.SourceHTTP
+	source := asset.SourceHTTP
 
 	// Create request with context
 	req, err := http.NewRequestWithContext(ctx, "GET", source.URL, nil)
@@ -53,7 +53,7 @@ func (h *HTTPSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifa
 	// Execute request
 	resp, err := h.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download artifact: %w", err)
+		return nil, fmt.Errorf("failed to download asset: %w", err)
 	}
 	defer resp.Body.Close()
 

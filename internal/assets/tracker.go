@@ -15,32 +15,34 @@ import (
 // TrackerFormatVersion is the version of the tracker file format
 const TrackerFormatVersion = "3"
 
-// Tracker tracks all installed artifacts across all scopes
+// Tracker tracks all installed assets across all scopes
 type Tracker struct {
-	Version   string              `json:"version"`
-	Artifacts []InstalledArtifact `json:"artifacts"`
+	Version string           `json:"version"`
+	Assets  []InstalledAsset `json:"assets"`
 }
 
-// InstalledArtifact represents a single installed artifact with its scope
-type InstalledArtifact struct {
+// InstalledAsset represents a single installed asset with its scope
+// (formerly InstalledArtifact)
+type InstalledAsset struct {
 	Name       string   `json:"name"`
 	Version    string   `json:"version"`
-	Type       string   `json:"type,omitempty"`       // Artifact type (skill, agent, mcp, etc) - added in v3
+	Type       string   `json:"type,omitempty"`       // Asset type (skill, agent, mcp, etc) - added in v3
 	Repository string   `json:"repository,omitempty"` // Empty for global scope
 	Path       string   `json:"path,omitempty"`       // Path within repo (if path-scoped)
 	Clients    []string `json:"clients"`
 }
 
-// ArtifactKey uniquely identifies an artifact by name + scope
-type ArtifactKey struct {
+// AssetKey uniquely identifies an asset by name + scope
+// (formerly ArtifactKey)
+type AssetKey struct {
 	Name       string
 	Repository string
 	Path       string
 }
 
-// NewArtifactKey creates a key from name and scope
-func NewArtifactKey(name string, scopeType lockfile.ScopeType, repoURL, repoPath string) ArtifactKey {
-	key := ArtifactKey{Name: name}
+// NewAssetKey creates a key from name and scope
+func NewAssetKey(name string, scopeType lockfile.ScopeType, repoURL, repoPath string) AssetKey {
+	key := AssetKey{Name: name}
 	if scopeType == lockfile.ScopeRepo || scopeType == lockfile.ScopePath {
 		key.Repository = repoURL
 	}
@@ -50,22 +52,22 @@ func NewArtifactKey(name string, scopeType lockfile.ScopeType, repoURL, repoPath
 	return key
 }
 
-// Key returns the unique key for this artifact
-func (a *InstalledArtifact) Key() ArtifactKey {
-	return ArtifactKey{
+// Key returns the unique key for this asset
+func (a *InstalledAsset) Key() AssetKey {
+	return AssetKey{
 		Name:       a.Name,
 		Repository: a.Repository,
 		Path:       a.Path,
 	}
 }
 
-// IsGlobal returns true if this artifact is installed globally
-func (a *InstalledArtifact) IsGlobal() bool {
+// IsGlobal returns true if this asset is installed globally
+func (a *InstalledAsset) IsGlobal() bool {
 	return a.Repository == ""
 }
 
 // ScopeDescription returns a human-readable scope description
-func (a *InstalledArtifact) ScopeDescription() string {
+func (a *InstalledAsset) ScopeDescription() string {
 	if a.Repository == "" {
 		return "Global"
 	}
@@ -84,7 +86,14 @@ func GetTrackerPath() (string, error) {
 	return filepath.Join(cacheDir, "installed.json"), nil
 }
 
+// trackerCompat is used for parsing old tracker files with "artifacts" field
+type trackerCompat struct {
+	Version   string           `json:"version"`
+	Artifacts []InstalledAsset `json:"artifacts"` // Old name for backwards compatibility
+}
+
 // LoadTracker loads the tracker file
+// Supports both new "assets" and old "artifacts" field names
 func LoadTracker() (*Tracker, error) {
 	trackerPath, err := GetTrackerPath()
 	if err != nil {
@@ -93,8 +102,8 @@ func LoadTracker() (*Tracker, error) {
 
 	if !utils.FileExists(trackerPath) {
 		return &Tracker{
-			Version:   TrackerFormatVersion,
-			Artifacts: []InstalledArtifact{},
+			Version: TrackerFormatVersion,
+			Assets:  []InstalledAsset{},
 		}, nil
 	}
 
@@ -106,6 +115,16 @@ func LoadTracker() (*Tracker, error) {
 	var tracker Tracker
 	if err := json.Unmarshal(data, &tracker); err != nil {
 		return nil, fmt.Errorf("failed to parse tracker: %w", err)
+	}
+
+	// Check if we got data from new "assets" field
+	if len(tracker.Assets) == 0 {
+		// Try parsing with old "artifacts" field name
+		var compat trackerCompat
+		if err := json.Unmarshal(data, &compat); err == nil && len(compat.Artifacts) > 0 {
+			tracker.Version = compat.Version
+			tracker.Assets = compat.Artifacts
+		}
 	}
 
 	return &tracker, nil
@@ -137,21 +156,21 @@ func SaveTracker(tracker *Tracker) error {
 	return nil
 }
 
-// FindArtifact finds an artifact by key in the tracker
-func (t *Tracker) FindArtifact(key ArtifactKey) *InstalledArtifact {
-	for i := range t.Artifacts {
-		if t.Artifacts[i].Key() == key {
-			return &t.Artifacts[i]
+// FindAsset finds an asset by key in the tracker
+func (t *Tracker) FindAsset(key AssetKey) *InstalledAsset {
+	for i := range t.Assets {
+		if t.Assets[i].Key() == key {
+			return &t.Assets[i]
 		}
 	}
 	return nil
 }
 
-// FindArtifactWithMatcher finds an artifact by name using a custom repo URL matcher function
+// FindAssetWithMatcher finds an asset by name using a custom repo URL matcher function
 // This is useful when the tracker URL format may differ from the search URL (e.g., SSH vs HTTPS)
-func (t *Tracker) FindArtifactWithMatcher(name, repoURL, path string, matchRepo func(a, b string) bool) *InstalledArtifact {
-	for i := range t.Artifacts {
-		a := &t.Artifacts[i]
+func (t *Tracker) FindAssetWithMatcher(name, repoURL, path string, matchRepo func(a, b string) bool) *InstalledAsset {
+	for i := range t.Assets {
+		a := &t.Assets[i]
 		if a.Name != name {
 			continue
 		}
@@ -171,10 +190,10 @@ func (t *Tracker) FindArtifactWithMatcher(name, repoURL, path string, matchRepo 
 	return nil
 }
 
-// FindByScope returns all artifacts matching a specific scope
-func (t *Tracker) FindByScope(repository, path string) []InstalledArtifact {
-	var result []InstalledArtifact
-	for _, a := range t.Artifacts {
+// FindByScope returns all assets matching a specific scope
+func (t *Tracker) FindByScope(repository, path string) []InstalledAsset {
+	var result []InstalledAsset
+	for _, a := range t.Assets {
 		if a.Repository == repository && a.Path == path {
 			result = append(result, a)
 		}
@@ -182,31 +201,31 @@ func (t *Tracker) FindByScope(repository, path string) []InstalledArtifact {
 	return result
 }
 
-// FindGlobal returns all globally-scoped artifacts
-func (t *Tracker) FindGlobal() []InstalledArtifact {
+// FindGlobal returns all globally-scoped assets
+func (t *Tracker) FindGlobal() []InstalledAsset {
 	return t.FindByScope("", "")
 }
 
-// FindForScope returns artifacts relevant to a given scope:
-// - All global artifacts
-// - Artifacts matching the repo (with URL normalization)
-// - For path scopes, artifacts whose path contains or equals the current path
-func (t *Tracker) FindForScope(repoURL, repoPath string, matchRepo func(a, b string) bool) []InstalledArtifact {
-	var result []InstalledArtifact
-	for _, a := range t.Artifacts {
-		// Include global artifacts
+// FindForScope returns assets relevant to a given scope:
+// - All global assets
+// - Assets matching the repo (with URL normalization)
+// - For path scopes, assets whose path contains or equals the current path
+func (t *Tracker) FindForScope(repoURL, repoPath string, matchRepo func(a, b string) bool) []InstalledAsset {
+	var result []InstalledAsset
+	for _, a := range t.Assets {
+		// Include global assets
 		if a.IsGlobal() {
 			result = append(result, a)
 			continue
 		}
 		// Check repo match using provided matcher
 		if a.Repository != "" && matchRepo(a.Repository, repoURL) {
-			// If artifact has no path restriction, include it
+			// If asset has no path restriction, include it
 			if a.Path == "" {
 				result = append(result, a)
 				continue
 			}
-			// If artifact has path, check if current path is within it
+			// If asset has path, check if current path is within it
 			if repoPath != "" && (strings.HasPrefix(repoPath, a.Path) || repoPath == a.Path) {
 				result = append(result, a)
 			}
@@ -215,61 +234,61 @@ func (t *Tracker) FindForScope(repoURL, repoPath string, matchRepo func(a, b str
 	return result
 }
 
-// UpsertArtifact adds or updates an artifact in the tracker
-func (t *Tracker) UpsertArtifact(artifact InstalledArtifact) {
-	key := artifact.Key()
-	for i := range t.Artifacts {
-		if t.Artifacts[i].Key() == key {
-			t.Artifacts[i] = artifact
+// UpsertAsset adds or updates an asset in the tracker
+func (t *Tracker) UpsertAsset(asset InstalledAsset) {
+	key := asset.Key()
+	for i := range t.Assets {
+		if t.Assets[i].Key() == key {
+			t.Assets[i] = asset
 			return
 		}
 	}
-	t.Artifacts = append(t.Artifacts, artifact)
+	t.Assets = append(t.Assets, asset)
 }
 
-// RemoveArtifact removes an artifact from the tracker by key
-func (t *Tracker) RemoveArtifact(key ArtifactKey) bool {
-	for i := range t.Artifacts {
-		if t.Artifacts[i].Key() == key {
-			t.Artifacts = append(t.Artifacts[:i], t.Artifacts[i+1:]...)
+// RemoveAsset removes an asset from the tracker by key
+func (t *Tracker) RemoveAsset(key AssetKey) bool {
+	for i := range t.Assets {
+		if t.Assets[i].Key() == key {
+			t.Assets = append(t.Assets[:i], t.Assets[i+1:]...)
 			return true
 		}
 	}
 	return false
 }
 
-// RemoveByScope removes all artifacts for a specific scope
+// RemoveByScope removes all assets for a specific scope
 func (t *Tracker) RemoveByScope(repository, path string) int {
-	var remaining []InstalledArtifact
+	var remaining []InstalledAsset
 	removed := 0
-	for _, a := range t.Artifacts {
+	for _, a := range t.Assets {
 		if a.Repository == repository && a.Path == path {
 			removed++
 		} else {
 			remaining = append(remaining, a)
 		}
 	}
-	t.Artifacts = remaining
+	t.Assets = remaining
 	return removed
 }
 
-// GroupByScope returns artifacts grouped by their scope
-func (t *Tracker) GroupByScope() map[string][]InstalledArtifact {
-	result := make(map[string][]InstalledArtifact)
-	for _, a := range t.Artifacts {
+// GroupByScope returns assets grouped by their scope
+func (t *Tracker) GroupByScope() map[string][]InstalledAsset {
+	result := make(map[string][]InstalledAsset)
+	for _, a := range t.Assets {
 		scope := a.ScopeDescription()
 		result[scope] = append(result[scope], a)
 	}
 	return result
 }
 
-// NeedsInstall checks if an artifact needs to be installed or updated
-// Returns true if the artifact is new, has a different version, or is missing clients
-func (t *Tracker) NeedsInstall(key ArtifactKey, version string, targetClients []string) bool {
-	existing := t.FindArtifact(key)
+// NeedsInstall checks if an asset needs to be installed or updated
+// Returns true if the asset is new, has a different version, or is missing clients
+func (t *Tracker) NeedsInstall(key AssetKey, version string, targetClients []string) bool {
+	existing := t.FindAsset(key)
 
 	if existing == nil {
-		return true // New artifact
+		return true // New asset
 	}
 
 	if existing.Version != version {

@@ -138,10 +138,10 @@ func (g *GitVault) GetLockFile(ctx context.Context, cachedETag string) (content 
 	return data, "", false, nil
 }
 
-// GetArtifact downloads an artifact using its source configuration
-func (g *GitVault) GetArtifact(ctx context.Context, artifact *lockfile.Artifact) ([]byte, error) {
-	// Lock only for path-based artifacts that read from the repository
-	if artifact.GetSourceType() == "path" {
+// GetAsset downloads an asset using its source configuration
+func (g *GitVault) GetAsset(ctx context.Context, asset *lockfile.Asset) ([]byte, error) {
+	// Lock only for path-based assets that read from the repository
+	if asset.GetSourceType() == "path" {
 		fileLock, err := g.acquireFileLock(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to acquire lock: %w", err)
@@ -149,21 +149,21 @@ func (g *GitVault) GetArtifact(ctx context.Context, artifact *lockfile.Artifact)
 		defer func() { _ = fileLock.Unlock() }()
 	}
 
-	// Dispatch to appropriate source handler based on artifact source type
-	switch artifact.GetSourceType() {
+	// Dispatch to appropriate source handler based on asset source type
+	switch asset.GetSourceType() {
 	case "http":
-		return g.httpHandler.Fetch(ctx, artifact)
+		return g.httpHandler.Fetch(ctx, asset)
 	case "path":
-		return g.pathHandler.Fetch(ctx, artifact)
+		return g.pathHandler.Fetch(ctx, asset)
 	case "git":
-		return g.gitHandler.Fetch(ctx, artifact)
+		return g.gitHandler.Fetch(ctx, asset)
 	default:
-		return nil, fmt.Errorf("unsupported source type: %s", artifact.GetSourceType())
+		return nil, fmt.Errorf("unsupported source type: %s", asset.GetSourceType())
 	}
 }
 
-// AddArtifact uploads an artifact to the Git repository
-func (g *GitVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifact, zipData []byte) error {
+// AddAsset uploads an asset to the Git repository
+func (g *GitVault) AddAsset(ctx context.Context, asset *lockfile.Asset, zipData []byte) error {
 	// Acquire file lock to prevent concurrent git operations
 	fileLock, err := g.acquireFileLock(ctx)
 	if err != nil {
@@ -176,27 +176,27 @@ func (g *GitVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifact,
 		return fmt.Errorf("failed to clone/update repository: %w", err)
 	}
 
-	// Create artifacts directory structure: artifacts/{name}/{version}/
-	artifactDir := filepath.Join(g.repoPath, "artifacts", artifact.Name, artifact.Version)
-	if err := os.MkdirAll(artifactDir, 0755); err != nil {
-		return fmt.Errorf("failed to create artifact directory: %w", err)
+	// Create assets directory structure: assets/{name}/{version}/
+	assetDir := filepath.Join(g.repoPath, "assets", asset.Name, asset.Version)
+	if err := os.MkdirAll(assetDir, 0755); err != nil {
+		return fmt.Errorf("failed to create asset directory: %w", err)
 	}
 
-	// For Git repositories, store artifacts exploded (not as zip)
+	// For Git repositories, store assets exploded (not as zip)
 	// This makes them easier to browse and diff in Git
-	if err := extractZipToDir(zipData, artifactDir); err != nil {
+	if err := extractZipToDir(zipData, assetDir); err != nil {
 		return fmt.Errorf("failed to extract zip to directory: %w", err)
 	}
 
 	// Update list.txt with this version
-	listPath := filepath.Join(g.repoPath, "artifacts", artifact.Name, "list.txt")
-	if err := g.updateVersionList(listPath, artifact.Version); err != nil {
+	listPath := filepath.Join(g.repoPath, "assets", asset.Name, "list.txt")
+	if err := g.updateVersionList(listPath, asset.Version); err != nil {
 		return fmt.Errorf("failed to update version list: %w", err)
 	}
 
-	// Commit and push the artifact to the repository
-	if err := g.commitAndPush(ctx, artifact); err != nil {
-		return fmt.Errorf("failed to commit and push artifact: %w", err)
+	// Commit and push the asset to the repository
+	if err := g.commitAndPush(ctx, asset); err != nil {
+		return fmt.Errorf("failed to commit and push asset: %w", err)
 	}
 
 	// Note: Lock file is NOT updated here - it will be updated separately
@@ -211,21 +211,21 @@ func (g *GitVault) GetLockFilePath() string {
 }
 
 // CommitAndPush commits all changes and pushes to remote
-func (g *GitVault) CommitAndPush(ctx context.Context, artifact *lockfile.Artifact) error {
-	return g.commitAndPush(ctx, artifact)
+func (g *GitVault) CommitAndPush(ctx context.Context, asset *lockfile.Asset) error {
+	return g.commitAndPush(ctx, asset)
 }
 
-// GetVersionList retrieves available versions for an artifact from list.txt
+// GetVersionList retrieves available versions for an asset from list.txt
 func (g *GitVault) GetVersionList(ctx context.Context, name string) ([]string, error) {
 	// Clone or update repository
 	if err := g.cloneOrUpdate(ctx); err != nil {
 		return nil, fmt.Errorf("failed to clone/update repository: %w", err)
 	}
 
-	// Read list.txt for this artifact
-	listPath := filepath.Join(g.repoPath, "artifacts", name, "list.txt")
+	// Read list.txt for this asset
+	listPath := filepath.Join(g.repoPath, "assets", name, "list.txt")
 	if _, err := os.Stat(listPath); os.IsNotExist(err) {
-		// No versions exist for this artifact
+		// No versions exist for this asset
 		return []string{}, nil
 	}
 
@@ -238,22 +238,22 @@ func (g *GitVault) GetVersionList(ctx context.Context, name string) ([]string, e
 	return parseVersionList(data), nil
 }
 
-// GetArtifactByVersion retrieves an artifact by name and version from the git repository
+// GetAssetByVersion retrieves an asset by name and version from the git repository
 // This creates a zip from the exploded directory
-func (g *GitVault) GetArtifactByVersion(ctx context.Context, name, version string) ([]byte, error) {
+func (g *GitVault) GetAssetByVersion(ctx context.Context, name, version string) ([]byte, error) {
 	// Clone or update repository
 	if err := g.cloneOrUpdate(ctx); err != nil {
 		return nil, fmt.Errorf("failed to clone/update repository: %w", err)
 	}
 
-	// Check if artifact directory exists
-	artifactDir := filepath.Join(g.repoPath, "artifacts", name, version)
-	if _, err := os.Stat(artifactDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("artifact %s@%s not found", name, version)
+	// Check if asset directory exists
+	assetDir := filepath.Join(g.repoPath, "assets", name, version)
+	if _, err := os.Stat(assetDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("asset %s@%s not found", name, version)
 	}
 
 	// Create zip from directory
-	zipData, err := utils.CreateZip(artifactDir)
+	zipData, err := utils.CreateZip(assetDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create zip from directory: %w", err)
 	}
@@ -261,13 +261,13 @@ func (g *GitVault) GetArtifactByVersion(ctx context.Context, name, version strin
 	return zipData, nil
 }
 
-// GetMetadata retrieves metadata for a specific artifact version
+// GetMetadata retrieves metadata for a specific asset version
 // Not applicable for Git repositories (metadata is inside the zip)
 func (g *GitVault) GetMetadata(ctx context.Context, name, version string) (*metadata.Metadata, error) {
 	return nil, fmt.Errorf("GetMetadata not supported for Git repositories")
 }
 
-// VerifyIntegrity checks hashes and sizes for downloaded artifacts
+// VerifyIntegrity checks hashes and sizes for downloaded assets
 func (g *GitVault) VerifyIntegrity(data []byte, hashes map[string]string, size int64) error {
 	// For Git repos, integrity is verified by Git's commit history
 	// No additional verification needed
@@ -505,7 +505,7 @@ func convertToRawURL(repoURL string) string {
 }
 
 // commitAndPush commits and pushes changes
-func (g *GitVault) commitAndPush(ctx context.Context, artifact *lockfile.Artifact) error {
+func (g *GitVault) commitAndPush(ctx context.Context, asset *lockfile.Asset) error {
 	// Ensure install.sh and README.md exist before committing
 	if err := g.ensureInstallScript(ctx); err != nil {
 		// Log warning but continue - these files are convenience features
@@ -518,7 +518,7 @@ func (g *GitVault) commitAndPush(ctx context.Context, artifact *lockfile.Artifac
 	}
 
 	// Commit with message
-	commitMsg := fmt.Sprintf("Add %s %s", artifact.Name, artifact.Version)
+	commitMsg := fmt.Sprintf("Add %s %s", asset.Name, asset.Version)
 	if err := g.gitClient.Commit(ctx, g.repoPath, commitMsg); err != nil {
 		return err
 	}

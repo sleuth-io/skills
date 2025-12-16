@@ -8,7 +8,7 @@ import (
 	"github.com/sleuth-io/skills/internal/lockfile"
 )
 
-// TestAddScopeModification tests modifying an existing artifact's scope
+// TestAddScopeModification tests modifying an existing asset's scope
 func TestAddScopeModification(t *testing.T) {
 	// Create fully isolated test environment
 	tempDir := t.TempDir()
@@ -46,7 +46,7 @@ func TestAddScopeModification(t *testing.T) {
 	}()
 
 	// Create test skill
-	skillMetadata := `[artifact]
+	skillMetadata := `[asset]
 name = "test-skill"
 type = "skill"
 description = "A test skill"
@@ -78,7 +78,7 @@ prompt-file = "SKILL.md"
 	// Option 1 = Make it available globally
 	t.Log("Step 2: Add test skill with global scope")
 	mockPrompter := NewMockPrompter().
-		ExpectConfirm("correct", true).         // Confirm detected artifact
+		ExpectConfirm("correct", true).         // Confirm detected asset
 		ExpectPrompt("Version", "1.0.0").       // Enter version
 		ExpectPrompt("choice", "1").            // Option 1: Make it available globally
 		ExpectConfirm("Run install now", false) // Don't run install
@@ -91,22 +91,22 @@ prompt-file = "SKILL.md"
 
 	// Verify skill was added globally
 	lockFilePath := filepath.Join(repoDir, "sx.lock")
-	artifact, exists := lockfile.FindArtifact(lockFilePath, "test-skill")
+	asset, exists := lockfile.FindAsset(lockFilePath, "test-skill")
 	if !exists {
-		t.Fatalf("Artifact not found in lock file")
+		t.Fatalf("Asset not found in lock file")
 	}
-	if !artifact.IsGlobal() {
+	if !asset.IsGlobal() {
 		t.Fatalf("Expected global scope, got repository-specific")
 	}
-	t.Log("✓ Artifact added with global scope")
+	t.Log("✓ Asset added with global scope")
 
 	// Step 3: Reconfigure to repository-specific scope
-	// When configuring existing artifact, it shows:
-	// Option 1: Keep current settings (new option for existing artifacts)
+	// When configuring existing asset, it shows:
+	// Option 1: Keep current settings (new option for existing assets)
 	// Option 2: Make it available globally
 	// Option 3: Add/modify repository-specific installations
 	// Option 4: Remove from installation
-	t.Log("Step 3: Reconfigure artifact to repository-specific")
+	t.Log("Step 3: Reconfigure asset to repository-specific")
 	mockPrompter2 := NewMockPrompter().
 		ExpectPrompt("choice", "3").                         // Option 3: Add/modify repository-specific
 		ExpectPrompt("choice", "1").                         // In modify menu, option 1: Add new repository
@@ -117,26 +117,26 @@ prompt-file = "SKILL.md"
 		ExpectConfirm("Run install now", false)              // Don't run install
 
 	addCmd2 := NewAddCommand()
-	addCmd2.SetArgs([]string{"test-skill"}) // Configure existing artifact by name
+	addCmd2.SetArgs([]string{"test-skill"}) // Configure existing asset by name
 	if err := ExecuteWithPrompter(addCmd2, mockPrompter2); err != nil {
 		t.Fatalf("Failed to reconfigure skill: %v", err)
 	}
 
 	// Verify scope changed to repository-specific
-	artifact2, exists := lockfile.FindArtifact(lockFilePath, "test-skill")
+	asset2, exists := lockfile.FindAsset(lockFilePath, "test-skill")
 	if !exists {
-		t.Fatalf("Artifact not found in lock file after reconfiguration")
+		t.Fatalf("Asset not found in lock file after reconfiguration")
 	}
-	if artifact2.IsGlobal() {
+	if asset2.IsGlobal() {
 		t.Fatalf("Expected repository-specific scope, got global")
 	}
-	if len(artifact2.Repositories) != 1 {
-		t.Fatalf("Expected 1 repository, got %d", len(artifact2.Repositories))
+	if len(asset2.Scopes) != 1 {
+		t.Fatalf("Expected 1 repository, got %d", len(asset2.Scopes))
 	}
-	if artifact2.Repositories[0].Repo != "https://github.com/user/repo" {
-		t.Fatalf("Expected repo https://github.com/user/repo, got %s", artifact2.Repositories[0].Repo)
+	if asset2.Scopes[0].Repo != "https://github.com/user/repo" {
+		t.Fatalf("Expected repo https://github.com/user/repo, got %s", asset2.Scopes[0].Repo)
 	}
-	t.Log("✓ Artifact reconfigured to repository-specific scope")
+	t.Log("✓ Asset reconfigured to repository-specific scope")
 }
 
 // TestAddKeepCurrentSettings tests keeping existing scope unchanged
@@ -177,7 +177,7 @@ func TestAddKeepCurrentSettings(t *testing.T) {
 	}()
 
 	// Create test skill
-	skillMetadata := `[artifact]
+	skillMetadata := `[asset]
 name = "test-skill"
 type = "skill"
 description = "A test skill"
@@ -207,7 +207,7 @@ prompt-file = "SKILL.md"
 	// Step 2: Add skill with repository-specific scope
 	t.Log("Step 2: Add test skill with repository-specific scope")
 	mockPrompter := NewMockPrompter().
-		ExpectConfirm("correct", true).                       // Confirm detected artifact
+		ExpectConfirm("correct", true).                       // Confirm detected asset
 		ExpectPrompt("Version", "1.0.0").                     // Enter version
 		ExpectPrompt("choice", "2").                          // Option 2: Add/modify repository-specific
 		ExpectPrompt("choice", "1").                          // Add new repository
@@ -227,12 +227,12 @@ prompt-file = "SKILL.md"
 
 	// Get initial state
 	lockFilePath := filepath.Join(repoDir, "sx.lock")
-	artifact, exists := lockfile.FindArtifact(lockFilePath, "test-skill")
+	asset, exists := lockfile.FindAsset(lockFilePath, "test-skill")
 	if !exists {
-		t.Fatalf("Artifact not found in lock file")
+		t.Fatalf("Asset not found in lock file")
 	}
-	initialRepoCount := len(artifact.Repositories)
-	t.Logf("✓ Artifact added with %d repository", initialRepoCount)
+	initialRepoCount := len(asset.Scopes)
+	t.Logf("✓ Asset added with %d repository", initialRepoCount)
 
 	// Step 3: Reconfigure but keep current settings (option 1)
 	// After Step 2 added a repo, currentRepos != nil, so "Keep current" is option 1
@@ -248,20 +248,20 @@ prompt-file = "SKILL.md"
 	}
 
 	// Verify configuration unchanged
-	artifact2, exists := lockfile.FindArtifact(lockFilePath, "test-skill")
+	asset2, exists := lockfile.FindAsset(lockFilePath, "test-skill")
 	if !exists {
-		t.Fatalf("Artifact not found in lock file after reconfiguration")
+		t.Fatalf("Asset not found in lock file after reconfiguration")
 	}
-	if len(artifact2.Repositories) != initialRepoCount {
-		t.Fatalf("Expected %d repositories, got %d", initialRepoCount, len(artifact2.Repositories))
+	if len(asset2.Scopes) != initialRepoCount {
+		t.Fatalf("Expected %d repositories, got %d", initialRepoCount, len(asset2.Scopes))
 	}
-	if artifact2.Repositories[0].Repo != artifact.Repositories[0].Repo {
+	if asset2.Scopes[0].Repo != asset.Scopes[0].Repo {
 		t.Fatalf("Repository changed unexpectedly")
 	}
 	t.Log("✓ Configuration preserved correctly")
 }
 
-// TestAddRemoveFromInstallation tests removing artifact from lock file
+// TestAddRemoveFromInstallation tests removing asset from lock file
 func TestAddRemoveFromInstallation(t *testing.T) {
 	// Create fully isolated test environment
 	tempDir := t.TempDir()
@@ -299,7 +299,7 @@ func TestAddRemoveFromInstallation(t *testing.T) {
 	}()
 
 	// Create test skill
-	skillMetadata := `[artifact]
+	skillMetadata := `[asset]
 name = "test-skill"
 type = "skill"
 description = "A test skill"
@@ -329,7 +329,7 @@ prompt-file = "SKILL.md"
 	// Step 2: Add skill with global scope
 	t.Log("Step 2: Add test skill with global scope")
 	mockPrompter := NewMockPrompter().
-		ExpectConfirm("correct", true).         // Confirm detected artifact
+		ExpectConfirm("correct", true).         // Confirm detected asset
 		ExpectPrompt("Version", "1.0.0").       // Enter version
 		ExpectPrompt("choice", "1").            // Option 1: Make it available globally
 		ExpectConfirm("Run install now", false) // Don't run install
@@ -342,38 +342,38 @@ prompt-file = "SKILL.md"
 
 	// Verify skill was added
 	lockFilePath := filepath.Join(repoDir, "sx.lock")
-	_, exists := lockfile.FindArtifact(lockFilePath, "test-skill")
+	_, exists := lockfile.FindAsset(lockFilePath, "test-skill")
 	if !exists {
-		t.Fatalf("Artifact not found in lock file")
+		t.Fatalf("Asset not found in lock file")
 	}
-	t.Log("✓ Artifact added to lock file")
+	t.Log("✓ Asset added to lock file")
 
 	// Step 3: Remove from installation
-	// For existing artifacts: Option 4 = Remove from installation
-	t.Log("Step 3: Remove artifact from installation")
+	// For existing assets: Option 4 = Remove from installation
+	t.Log("Step 3: Remove asset from installation")
 	mockPrompter2 := NewMockPrompter().
 		ExpectPrompt("choice", "4").            // Option 4: Remove from installation
 		ExpectConfirm("Run install now", false) // Don't run install
 
 	addCmd2 := NewAddCommand()
-	addCmd2.SetArgs([]string{"test-skill"}) // Configure existing artifact by name
+	addCmd2.SetArgs([]string{"test-skill"}) // Configure existing asset by name
 	if err := ExecuteWithPrompter(addCmd2, mockPrompter2); err != nil {
 		t.Fatalf("Failed to remove skill: %v", err)
 	}
 
-	// Verify artifact removed from lock file
-	_, exists = lockfile.FindArtifact(lockFilePath, "test-skill")
+	// Verify asset removed from lock file
+	_, exists = lockfile.FindAsset(lockFilePath, "test-skill")
 	if exists {
-		t.Fatalf("Artifact should have been removed from lock file")
+		t.Fatalf("Asset should have been removed from lock file")
 	}
-	t.Log("✓ Artifact removed from lock file")
+	t.Log("✓ Asset removed from lock file")
 
-	// Verify artifact still exists in repository
-	artifactDir := filepath.Join(repoDir, "artifacts", "test-skill", "1.0.0")
-	if _, err := os.Stat(artifactDir); os.IsNotExist(err) {
-		t.Fatalf("Artifact should still exist in repository: %s", artifactDir)
+	// Verify asset still exists in repository
+	assetDir := filepath.Join(repoDir, "assets", "test-skill", "1.0.0")
+	if _, err := os.Stat(assetDir); os.IsNotExist(err) {
+		t.Fatalf("Asset should still exist in repository: %s", assetDir)
 	}
-	t.Log("✓ Artifact still available in repository")
+	t.Log("✓ Asset still available in repository")
 }
 
 // TestAddFirstTimeNoScopes tests first-time installation workflow
@@ -414,7 +414,7 @@ func TestAddFirstTimeNoScopes(t *testing.T) {
 	}()
 
 	// Create test skill
-	skillMetadata := `[artifact]
+	skillMetadata := `[asset]
 name = "test-skill"
 type = "skill"
 description = "A test skill"
@@ -442,10 +442,10 @@ prompt-file = "SKILL.md"
 	InitPathRepo(t, repoDir)
 
 	// Step 2: Add skill but choose not to install
-	// For new artifacts: Option 3 = Remove from installation (don't install)
+	// For new assets: Option 3 = Remove from installation (don't install)
 	t.Log("Step 2: Add test skill but don't install")
 	mockPrompter := NewMockPrompter().
-		ExpectConfirm("correct", true).         // Confirm detected artifact
+		ExpectConfirm("correct", true).         // Confirm detected asset
 		ExpectPrompt("Version", "1.0.0").       // Enter version
 		ExpectPrompt("choice", "3").            // Option 3: Remove from installation (don't install)
 		ExpectConfirm("Run install now", false) // Don't run install
@@ -456,24 +456,24 @@ prompt-file = "SKILL.md"
 		t.Fatalf("Failed to add skill: %v", err)
 	}
 
-	// Verify artifact NOT in lock file
+	// Verify asset NOT in lock file
 	lockFilePath := filepath.Join(repoDir, "sx.lock")
-	_, exists := lockfile.FindArtifact(lockFilePath, "test-skill")
+	_, exists := lockfile.FindAsset(lockFilePath, "test-skill")
 	if exists {
-		t.Fatalf("Artifact should not be in lock file")
+		t.Fatalf("Asset should not be in lock file")
 	}
-	t.Log("✓ Artifact not added to lock file (as expected)")
+	t.Log("✓ Asset not added to lock file (as expected)")
 
-	// Verify artifact exists in repository
-	artifactDir := filepath.Join(repoDir, "artifacts", "test-skill", "1.0.0")
-	if _, err := os.Stat(artifactDir); os.IsNotExist(err) {
-		t.Fatalf("Artifact should exist in repository: %s", artifactDir)
+	// Verify asset exists in repository
+	assetDir := filepath.Join(repoDir, "assets", "test-skill", "1.0.0")
+	if _, err := os.Stat(assetDir); os.IsNotExist(err) {
+		t.Fatalf("Asset should exist in repository: %s", assetDir)
 	}
-	t.Log("✓ Artifact available in repository only")
+	t.Log("✓ Asset available in repository only")
 
 	// Step 3: Now install it globally by name
-	// When artifact exists in repo but not in lock file, it shows options for first-time install
-	t.Log("Step 3: Install artifact globally by name")
+	// When asset exists in repo but not in lock file, it shows options for first-time install
+	t.Log("Step 3: Install asset globally by name")
 	mockPrompter2 := NewMockPrompter().
 		ExpectPrompt("choice", "1").            // Option 1: Make it available globally
 		ExpectConfirm("Run install now", false) // Don't run install
@@ -484,13 +484,13 @@ prompt-file = "SKILL.md"
 		t.Fatalf("Failed to install skill: %v", err)
 	}
 
-	// Verify artifact now in lock file as global
-	artifact, exists := lockfile.FindArtifact(lockFilePath, "test-skill")
+	// Verify asset now in lock file as global
+	asset, exists := lockfile.FindAsset(lockFilePath, "test-skill")
 	if !exists {
-		t.Fatalf("Artifact not found in lock file after installation")
+		t.Fatalf("Asset not found in lock file after installation")
 	}
-	if !artifact.IsGlobal() {
+	if !asset.IsGlobal() {
 		t.Fatalf("Expected global scope")
 	}
-	t.Log("✓ Artifact successfully installed globally")
+	t.Log("✓ Asset successfully installed globally")
 }

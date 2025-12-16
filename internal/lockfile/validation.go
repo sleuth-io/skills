@@ -11,7 +11,7 @@ var (
 	// gitCommitSHARegex matches full 40-character Git commit SHAs
 	gitCommitSHARegex = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
-	// nameRegex matches valid artifact names (alphanumeric, dashes, underscores)
+	// nameRegex matches valid asset names (alphanumeric, dashes, underscores)
 	nameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 )
 
@@ -30,31 +30,31 @@ func (lf *LockFile) Validate() error {
 		return fmt.Errorf("created-by is required")
 	}
 
-	// Validate each artifact
+	// Validate each asset
 	names := make(map[string]bool)
-	for i, artifact := range lf.Artifacts {
-		if err := artifact.Validate(); err != nil {
-			return fmt.Errorf("artifact %d (%s): %w", i, artifact.Name, err)
+	for i, ast := range lf.Assets {
+		if err := ast.Validate(); err != nil {
+			return fmt.Errorf("asset %d (%s): %w", i, ast.Name, err)
 		}
 
-		// Check for duplicate artifacts (name@version must be unique)
-		key := artifact.Key()
+		// Check for duplicate assets (name@version must be unique)
+		key := ast.Key()
 		if names[key] {
-			return fmt.Errorf("duplicate artifact: %s", key)
+			return fmt.Errorf("duplicate asset: %s", key)
 		}
 		names[key] = true
 	}
 
-	// Validate dependencies reference existing artifacts
-	artifactMap := make(map[string]*Artifact)
-	for i := range lf.Artifacts {
-		artifactMap[lf.Artifacts[i].Name] = &lf.Artifacts[i]
+	// Validate dependencies reference existing assets
+	assetMap := make(map[string]*Asset)
+	for i := range lf.Assets {
+		assetMap[lf.Assets[i].Name] = &lf.Assets[i]
 	}
 
-	for i, artifact := range lf.Artifacts {
-		for _, dep := range artifact.Dependencies {
-			if err := validateDependency(&dep, artifactMap, &artifact); err != nil {
-				return fmt.Errorf("artifact %d (%s): dependency %s: %w", i, artifact.Name, dep.Name, err)
+	for i, ast := range lf.Assets {
+		for _, dep := range ast.Dependencies {
+			if err := validateDependency(&dep, assetMap, &ast); err != nil {
+				return fmt.Errorf("asset %d (%s): dependency %s: %w", i, ast.Name, dep.Name, err)
 			}
 		}
 	}
@@ -62,8 +62,8 @@ func (lf *LockFile) Validate() error {
 	return nil
 }
 
-// Validate validates a single artifact
-func (a *Artifact) Validate() error {
+// Validate validates a single asset
+func (a *Asset) Validate() error {
 	// Validate required fields
 	if a.Name == "" {
 		return fmt.Errorf("name is required")
@@ -83,7 +83,7 @@ func (a *Artifact) Validate() error {
 	}
 
 	if !a.Type.IsValid() {
-		return fmt.Errorf("invalid artifact type: %s", a.Type)
+		return fmt.Errorf("invalid asset type: %s", a.Type)
 	}
 
 	// Validate exactly one source is specified
@@ -122,19 +122,19 @@ func (a *Artifact) Validate() error {
 		}
 	}
 
-	// Validate repositories
-	for i, repo := range a.Repositories {
-		if err := repo.Validate(); err != nil {
-			return fmt.Errorf("repositories[%d]: %w", i, err)
+	// Validate scopes
+	for i, scope := range a.Scopes {
+		if err := scope.Validate(); err != nil {
+			return fmt.Errorf("scopes[%d]: %w", i, err)
 		}
 	}
 
 	return nil
 }
 
-// Validate validates a Repository entry
-func (r *Repository) Validate() error {
-	if r.Repo == "" {
+// Validate validates a Scope entry
+func (s *Scope) Validate() error {
+	if s.Repo == "" {
 		return fmt.Errorf("repo is required")
 	}
 
@@ -189,25 +189,25 @@ func (s *SourceGit) Validate() error {
 }
 
 // validateDependency validates a dependency reference
-func validateDependency(dep *Dependency, artifactMap map[string]*Artifact, parent *Artifact) error {
+func validateDependency(dep *Dependency, assetMap map[string]*Asset, parent *Asset) error {
 	if dep.Name == "" {
 		return fmt.Errorf("dependency name is required")
 	}
 
 	// Check if dependency exists in lock file
-	artifact, exists := artifactMap[dep.Name]
+	ast, exists := assetMap[dep.Name]
 	if !exists {
 		return fmt.Errorf("dependency not found in lock file")
 	}
 
 	// If version is specified, it must match
-	if dep.Version != "" && dep.Version != artifact.Version {
-		return fmt.Errorf("dependency version %q does not match artifact version %q", dep.Version, artifact.Version)
+	if dep.Version != "" && dep.Version != ast.Version {
+		return fmt.Errorf("dependency version %q does not match asset version %q", dep.Version, ast.Version)
 	}
 
 	// Check for self-dependency
 	if dep.Name == parent.Name {
-		return fmt.Errorf("artifact cannot depend on itself")
+		return fmt.Errorf("asset cannot depend on itself")
 	}
 
 	return nil
@@ -217,21 +217,21 @@ func validateDependency(dep *Dependency, artifactMap map[string]*Artifact, paren
 func (lf *LockFile) ValidateDependencies() error {
 	// Build dependency graph
 	graph := make(map[string][]string)
-	for _, artifact := range lf.Artifacts {
-		deps := make([]string, 0, len(artifact.Dependencies))
-		for _, dep := range artifact.Dependencies {
+	for _, ast := range lf.Assets {
+		deps := make([]string, 0, len(ast.Dependencies))
+		for _, dep := range ast.Dependencies {
 			deps = append(deps, dep.Name)
 		}
-		graph[artifact.Name] = deps
+		graph[ast.Name] = deps
 	}
 
-	// Check each artifact for circular dependencies
-	for _, artifact := range lf.Artifacts {
+	// Check each asset for circular dependencies
+	for _, ast := range lf.Assets {
 		visited := make(map[string]bool)
 		recStack := make(map[string]bool)
 
-		if hasCycle(artifact.Name, graph, visited, recStack) {
-			return fmt.Errorf("circular dependency detected involving %s", artifact.Name)
+		if hasCycle(ast.Name, graph, visited, recStack) {
+			return fmt.Errorf("circular dependency detected involving %s", ast.Name)
 		}
 	}
 

@@ -6,66 +6,66 @@ import (
 	"github.com/sleuth-io/skills/internal/lockfile"
 )
 
-// DependencyResolver resolves artifact dependencies
+// DependencyResolver resolves asset dependencies
 type DependencyResolver struct {
-	artifacts map[string]*lockfile.Artifact
+	assets map[string]*lockfile.Asset
 }
 
 // NewDependencyResolver creates a new dependency resolver
 func NewDependencyResolver(lockFile *lockfile.LockFile) *DependencyResolver {
-	artifactMap := make(map[string]*lockfile.Artifact)
-	for i := range lockFile.Artifacts {
-		artifactMap[lockFile.Artifacts[i].Name] = &lockFile.Artifacts[i]
+	assetMap := make(map[string]*lockfile.Asset)
+	for i := range lockFile.Assets {
+		assetMap[lockFile.Assets[i].Name] = &lockFile.Assets[i]
 	}
 
 	return &DependencyResolver{
-		artifacts: artifactMap,
+		assets: assetMap,
 	}
 }
 
-// Resolve resolves dependencies and returns artifacts in topological order
-func (r *DependencyResolver) Resolve(artifacts []*lockfile.Artifact) ([]*lockfile.Artifact, error) {
+// Resolve resolves dependencies and returns assets in topological order
+func (r *DependencyResolver) Resolve(assets []*lockfile.Asset) ([]*lockfile.Asset, error) {
 	// Build dependency graph
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
-	artifactSet := make(map[string]*lockfile.Artifact)
+	assetSet := make(map[string]*lockfile.Asset)
 
 	// Initialize graph
-	for _, artifact := range artifacts {
-		graph[artifact.Name] = []string{}
-		inDegree[artifact.Name] = 0
-		artifactSet[artifact.Name] = artifact
+	for _, asset := range assets {
+		graph[asset.Name] = []string{}
+		inDegree[asset.Name] = 0
+		assetSet[asset.Name] = asset
 	}
 
 	// Build edges (if A depends on B, then B -> A)
-	for _, artifact := range artifacts {
-		for _, dep := range artifact.Dependencies {
-			// Check if dependency is in the artifact set
-			if artifactSet[dep.Name] == nil {
-				// Dependency not in the set, try to find it in the full artifacts map
-				if r.artifacts[dep.Name] == nil {
-					return nil, fmt.Errorf("dependency not found: %s (required by %s)", dep.Name, artifact.Name)
+	for _, asset := range assets {
+		for _, dep := range asset.Dependencies {
+			// Check if dependency is in the asset set
+			if assetSet[dep.Name] == nil {
+				// Dependency not in the set, try to find it in the full assets map
+				if r.assets[dep.Name] == nil {
+					return nil, fmt.Errorf("dependency not found: %s (required by %s)", dep.Name, asset.Name)
 				}
 				// Add the dependency to the set
-				depArtifact := r.artifacts[dep.Name]
-				artifactSet[dep.Name] = depArtifact
+				depAsset := r.assets[dep.Name]
+				assetSet[dep.Name] = depAsset
 				graph[dep.Name] = []string{}
 				inDegree[dep.Name] = 0
 
 				// Recursively add dependencies of the dependency
-				if err := r.addDependenciesRecursive(depArtifact, graph, inDegree, artifactSet); err != nil {
+				if err := r.addDependenciesRecursive(depAsset, graph, inDegree, assetSet); err != nil {
 					return nil, err
 				}
 			}
 
-			// Add edge: dependency -> artifact
-			graph[dep.Name] = append(graph[dep.Name], artifact.Name)
-			inDegree[artifact.Name]++
+			// Add edge: dependency -> asset
+			graph[dep.Name] = append(graph[dep.Name], asset.Name)
+			inDegree[asset.Name]++
 		}
 	}
 
 	// Topological sort using Kahn's algorithm
-	var result []*lockfile.Artifact
+	var result []*lockfile.Asset
 	var queue []string
 
 	// Find nodes with no incoming edges
@@ -82,8 +82,8 @@ func (r *DependencyResolver) Resolve(artifacts []*lockfile.Artifact) ([]*lockfil
 		queue = queue[1:]
 
 		// Add to result
-		if artifactSet[current] != nil {
-			result = append(result, artifactSet[current])
+		if assetSet[current] != nil {
+			result = append(result, assetSet[current])
 		}
 
 		// Process neighbors
@@ -96,7 +96,7 @@ func (r *DependencyResolver) Resolve(artifacts []*lockfile.Artifact) ([]*lockfil
 	}
 
 	// Check for cycles
-	if len(result) != len(artifactSet) {
+	if len(result) != len(assetSet) {
 		return nil, fmt.Errorf("circular dependency detected")
 	}
 
@@ -104,29 +104,29 @@ func (r *DependencyResolver) Resolve(artifacts []*lockfile.Artifact) ([]*lockfil
 }
 
 // addDependenciesRecursive recursively adds dependencies to the graph
-func (r *DependencyResolver) addDependenciesRecursive(artifact *lockfile.Artifact, graph map[string][]string, inDegree map[string]int, artifactSet map[string]*lockfile.Artifact) error {
-	for _, dep := range artifact.Dependencies {
-		if artifactSet[dep.Name] == nil {
+func (r *DependencyResolver) addDependenciesRecursive(asset *lockfile.Asset, graph map[string][]string, inDegree map[string]int, assetSet map[string]*lockfile.Asset) error {
+	for _, dep := range asset.Dependencies {
+		if assetSet[dep.Name] == nil {
 			// Dependency not yet added
-			if r.artifacts[dep.Name] == nil {
-				return fmt.Errorf("dependency not found: %s (required by %s)", dep.Name, artifact.Name)
+			if r.assets[dep.Name] == nil {
+				return fmt.Errorf("dependency not found: %s (required by %s)", dep.Name, asset.Name)
 			}
 
-			depArtifact := r.artifacts[dep.Name]
-			artifactSet[dep.Name] = depArtifact
+			depAsset := r.assets[dep.Name]
+			assetSet[dep.Name] = depAsset
 			graph[dep.Name] = []string{}
 			inDegree[dep.Name] = 0
 
 			// Recursively add its dependencies
-			if err := r.addDependenciesRecursive(depArtifact, graph, inDegree, artifactSet); err != nil {
+			if err := r.addDependenciesRecursive(depAsset, graph, inDegree, assetSet); err != nil {
 				return err
 			}
 		}
 
 		// Add edge if not already present
-		if !contains(graph[dep.Name], artifact.Name) {
-			graph[dep.Name] = append(graph[dep.Name], artifact.Name)
-			inDegree[artifact.Name]++
+		if !contains(graph[dep.Name], asset.Name) {
+			graph[dep.Name] = append(graph[dep.Name], asset.Name)
+			inDegree[asset.Name]++
 		}
 	}
 
@@ -145,23 +145,23 @@ func contains(slice []string, item string) bool {
 
 // ValidateDependencies checks that all dependencies are present and resolvable
 func ValidateDependencies(lockFile *lockfile.LockFile) error {
-	artifactMap := make(map[string]*lockfile.Artifact)
-	for i := range lockFile.Artifacts {
-		artifactMap[lockFile.Artifacts[i].Name] = &lockFile.Artifacts[i]
+	assetMap := make(map[string]*lockfile.Asset)
+	for i := range lockFile.Assets {
+		assetMap[lockFile.Assets[i].Name] = &lockFile.Assets[i]
 	}
 
-	// Check each artifact's dependencies
-	for _, artifact := range lockFile.Artifacts {
-		for _, dep := range artifact.Dependencies {
-			if artifactMap[dep.Name] == nil {
-				return fmt.Errorf("artifact %s depends on %s, which is not in the lock file", artifact.Name, dep.Name)
+	// Check each asset's dependencies
+	for _, asset := range lockFile.Assets {
+		for _, dep := range asset.Dependencies {
+			if assetMap[dep.Name] == nil {
+				return fmt.Errorf("asset %s depends on %s, which is not in the lock file", asset.Name, dep.Name)
 			}
 
 			// If version is specified, check it matches
 			if dep.Version != "" {
-				foundArtifact := artifactMap[dep.Name]
-				if foundArtifact.Version != dep.Version {
-					return fmt.Errorf("artifact %s requires %s@%s, but lock file has %s", artifact.Name, dep.Name, dep.Version, foundArtifact.Version)
+				foundAsset := assetMap[dep.Name]
+				if foundAsset.Version != dep.Version {
+					return fmt.Errorf("asset %s requires %s@%s, but lock file has %s", asset.Name, dep.Name, dep.Version, foundAsset.Version)
 				}
 			}
 		}

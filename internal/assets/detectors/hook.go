@@ -5,16 +5,16 @@ import (
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
-// HookHandler handles hook artifact installation
+// HookDetector detects hook assets
 type HookDetector struct{}
 
 // Compile-time interface checks
 var (
-	_ ArtifactTypeDetector = (*HookDetector)(nil)
-	_ UsageDetector        = (*HookDetector)(nil)
+	_ AssetTypeDetector = (*HookDetector)(nil)
+	_ UsageDetector     = (*HookDetector)(nil)
 )
 
-// DetectType returns true if files indicate this is a hook artifact
+// DetectType returns true if files indicate this is a hook asset
 func (h *HookDetector) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "hook.sh" || file == "hook.py" || file == "hook.js" {
@@ -24,7 +24,7 @@ func (h *HookDetector) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *HookDetector) GetType() string {
 	return "hook"
 }
@@ -33,7 +33,7 @@ func (h *HookDetector) GetType() string {
 func (h *HookDetector) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeHook,

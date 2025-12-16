@@ -67,14 +67,14 @@ func (r *Registry) GetAll() []Client {
 	return clients
 }
 
-// FilterByArtifactType returns clients that support the given artifact type
-func (r *Registry) FilterByArtifactType(artifactType asset.Type) []Client {
+// FilterByAssetType returns clients that support the given asset type
+func (r *Registry) FilterByAssetType(assetType asset.Type) []Client {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var supported []Client
 	for _, client := range r.clients {
-		if client.SupportsArtifactType(artifactType) {
+		if client.SupportsAssetType(assetType) {
 			supported = append(supported, client)
 		}
 	}

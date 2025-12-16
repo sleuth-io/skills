@@ -1,20 +1,20 @@
-# Sleuth Artifact Metadata Specification
+# SX Asset Metadata Specification
 
 ## Overview
 
-This specification defines `metadata.toml`, a standardized format for declaring metadata about AI client artifacts (MCPs, skills, agents, commands, hooks). The format provides a single source of truth for artifact information, dependencies, and configuration.
+This specification defines `metadata.toml`, a standardized format for declaring metadata about AI client assets (MCPs, skills, agents, commands, hooks). The format provides a single source of truth for asset information, dependencies, and configuration.
 
 ## Metadata Location
 
 Metadata files are stored in **two locations**:
 
-1. **Alongside the artifact** - In repositories, at `{name}/{version}/metadata.toml`
-   - For efficient access without downloading the full artifact
+1. **Alongside the asset** - In vaults, at `{name}/{version}/metadata.toml`
+   - For efficient access without downloading the full asset
    - Used for: Version detection, dependency resolution, validation before download
-   - See `repository-spec.md` for repository structure
+   - See `vault-spec.md` for vault structure
 
-2. **Inside the artifact** - At the root of the zip file
-   - Travels with the artifact, ensures canonical metadata is always available
+2. **Inside the asset** - At the root of the zip file
+   - Travels with the asset, ensures canonical metadata is always available
    - Used for: Installation-time validation, offline scenarios
 
 This dual-location approach provides both **performance** and **portability**.
@@ -24,7 +24,7 @@ This dual-location approach provides both **performance** and **portability**.
 1. **Explicit over implicit** - All file references and configuration declared in metadata
 2. **Minimal required fields** - Only name, version, and type are required
 3. **TOML format** - Human-readable, comment-friendly, modern standard
-4. **Type-driven** - Artifact type determines required configuration sections
+4. **Type-driven** - Asset type determines required configuration sections
 5. **Single source of truth** - All configuration in metadata.toml, no separate config files needed
 
 ## File Naming
@@ -38,10 +38,10 @@ Metadata files must be named:
 ### Top-Level Required Fields
 
 ```toml
-[artifact]
-name = "artifact-name"       # Required; normalized name
+[asset]
+name = "asset-name"          # Required; normalized name
 version = "1.2.3"            # Required; semantic version
-type = "mcp"                 # Required; artifact type
+type = "mcp"                 # Required; asset type
 ```
 
 ### Metadata Version (Optional)
@@ -63,13 +63,13 @@ metadata-version = "1.0"     # Optional; metadata format version
 ### Top-Level Optional Fields
 
 ```toml
-[artifact]
-name = "artifact-name"
+[asset]
+name = "asset-name"
 version = "1.2.3"
 type = "mcp"
 
 # Optional metadata
-description = "Brief description of the artifact"
+description = "Brief description of the asset"
 license = "MIT"              # SPDX license identifier
 authors = ["Alice Smith <alice@example.com>", "Bob Jones <bob@example.com>"]
 keywords = ["keyword1", "keyword2", "keyword3"]
@@ -81,7 +81,7 @@ documentation = "https://docs.example.com"
 readme = "README.md"         # Path to readme file in package
 ```
 
-## Artifact Types
+## Asset Types
 
 - `skill`: AI skill with prompt file
 - `command`: Slash command with prompt file
@@ -92,7 +92,7 @@ readme = "README.md"         # Path to readme file in package
 
 ## Type-Specific Configuration
 
-Each artifact type requires a corresponding section with specific fields.
+Each asset type requires a corresponding section with specific fields.
 
 ### Skills (`type = "skill"`)
 
@@ -109,7 +109,7 @@ Each artifact type requires a corresponding section with specific fields.
 - `supported-languages`: Array of programming languages
 
 ```toml
-[artifact]
+[asset]
 name = "code-reviewer"
 version = "3.0.0"
 type = "skill"
@@ -146,7 +146,7 @@ code-reviewer/
 - `dangerous`: Boolean indicating if command performs destructive operations
 
 ```toml
-[artifact]
+[asset]
 name = "deploy"
 version = "1.0.0"
 type = "command"
@@ -182,7 +182,7 @@ deploy/
 - `requires`: Array of required tools/commands
 
 ```toml
-[artifact]
+[asset]
 name = "api-helper"
 version = "0.5.0"
 type = "agent"
@@ -224,7 +224,7 @@ api-helper/
 - **Script-based hooks**: Use `.sh`, `.py`, `.js`, or other executable scripts
 
 ```toml
-[artifact]
+[asset]
 name = "pre-commit-linter"
 version = "2.0.0"
 type = "hook"
@@ -266,7 +266,7 @@ pre-commit-linter/
 **Important**: All MCP configuration is in metadata.toml. No separate JSON config file is needed.
 
 ```toml
-[artifact]
+[asset]
 name = "database-mcp"
 version = "2.0.0"
 type = "mcp"
@@ -317,10 +317,10 @@ database-mcp/
 - `env`: Map of environment variables
 - `timeout`: Timeout in milliseconds
 
-**Important**: MCP Remote artifacts contain ONLY metadata.toml. No server code is included - the configuration points to an external server (hosted service, npm package, etc.).
+**Important**: MCP Remote assets contain ONLY metadata.toml. No server code is included - the configuration points to an external server (hosted service, npm package, etc.).
 
 ```toml
-[artifact]
+[asset]
 name = "hosted-github"
 version = "1.0.0"
 type = "mcp-remote"
@@ -395,7 +395,7 @@ dependencies = [
 
 ### Dependency Resolution
 
-- Dependencies reference artifacts that will be in the lock file
+- Dependencies reference assets that will be in the lock file
 - All dependencies must be resolved during lock file generation
 - Cross-type dependencies are supported (MCPs can depend on skills, etc.)
 - Circular dependencies are detected and reported as errors
@@ -412,13 +412,13 @@ deployed-at = "2025-01-15T10:30:00Z"
 complexity = "intermediate"
 ```
 
-This section is ignored by the core Sleuth tooling but available for custom tools and workflows.
+This section is ignored by the core SX tooling but available for custom tools and workflows.
 
 ## Validation Rules
 
-### All Artifacts
+### All Assets
 
-- `[artifact]` section required
+- `[asset]` section required
 - `name`, `version`, `type` fields required
 - `version` must be valid semantic version (X.Y.Z)
 - `type` must be one of: skill, command, agent, hook, mcp, mcp-remote
@@ -451,24 +451,24 @@ This section is ignored by the core Sleuth tooling but available for custom tool
 
 ## Integration with Lock File
 
-The lock file (`sleuth.lock`) references artifacts with their resolved metadata:
+The lock file (`sx.lock`) references assets with their resolved metadata:
 
 ```toml
-[[artifacts]]
+[[assets]]
 name = "code-reviewer"
 version = "3.0.0"
 type = "skill"
 
-[artifacts.source-http]
-url = "https://app.sleuth.io/api/skills/artifacts/code-reviewer/3.0.0"
+[assets.source-http]
+url = "https://vault.example.com/assets/code-reviewer/3.0.0/code-reviewer-3.0.0.zip"
 hashes = {sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
 ```
 
 When the client installs:
 
-1. Downloads/fetches artifact based on source
+1. Downloads/fetches asset based on source
 2. Extracts metadata.toml
-3. Validates metadata against artifact type rules
+3. Validates metadata against asset type rules
 4. Reads type-specific configuration
 5. Locates required files (prompt-file, script-file, etc.)
 6. Installs to appropriate location based on scope
@@ -478,7 +478,7 @@ When the client installs:
 ### Minimal Skill
 
 ```toml
-[artifact]
+[asset]
 name = "hello-world"
 version = "1.0.0"
 type = "skill"
@@ -490,7 +490,7 @@ prompt-file = "SKILL.md"
 ### Full-Featured MCP Server
 
 ```toml
-[artifact]
+[asset]
 name = "database-mcp"
 version = "2.0.0"
 type = "mcp"
@@ -529,7 +529,7 @@ complexity = "intermediate"
 ### Command with Aliases
 
 ```toml
-[artifact]
+[asset]
 name = "deploy"
 version = "1.0.0"
 type = "command"
@@ -553,7 +553,7 @@ approved-by = "security-team"
 ### AI-Based Hook
 
 ```toml
-[artifact]
+[asset]
 name = "pre-commit-ai"
 version = "1.0.0"
 type = "hook"
@@ -575,7 +575,7 @@ dependencies = [
 ### MCP Remote
 
 ```toml
-[artifact]
+[asset]
 name = "github-remote"
 version = "1.0.0"
 type = "mcp-remote"
@@ -597,7 +597,7 @@ timeout = 30000
 ### Agent with Dependencies
 
 ```toml
-[artifact]
+[asset]
 name = "api-helper"
 version = "0.5.0"
 type = "agent"
@@ -623,9 +623,9 @@ supported-protocols = ["rest", "graphql", "grpc"]
 
 ## Migration from Current System
 
-For existing artifacts without metadata.toml:
+For existing assets without metadata.toml:
 
-1. **Create metadata.toml** in artifact directory
+1. **Create metadata.toml** in asset directory
 2. **Extract metadata** from filename or existing config files
 3. **Add required fields**: name, version, type
 4. **Add type-specific section** with file references
@@ -650,7 +650,7 @@ code-reviewer/
 ```
 
 ```toml
-[artifact]
+[asset]
 name = "code-reviewer"
 version = "1.0.0"  # extracted from filename or generated
 type = "skill"
@@ -661,7 +661,7 @@ prompt-file = "SKILL.md"  # renamed from skill.md
 
 ## Reserved Fields
 
-The following field names are reserved and must not be used for custom metadata in the `[artifact]`, type-specific sections, or `dependencies` array:
+The following field names are reserved and must not be used for custom metadata in the `[asset]`, type-specific sections, or `dependencies` array:
 
 - Any field defined in this specification
 - Fields starting with underscore (`_`)

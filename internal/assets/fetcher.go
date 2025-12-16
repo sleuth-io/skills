@@ -14,39 +14,39 @@ import (
 	vaultpkg "github.com/sleuth-io/skills/internal/vault"
 )
 
-// ArtifactFetcher handles fetching artifacts from a vault
-type ArtifactFetcher struct {
+// AssetFetcher handles fetching assets from a vault
+type AssetFetcher struct {
 	vault vaultpkg.Vault
 }
 
-// NewArtifactFetcher creates a new artifact fetcher
-func NewArtifactFetcher(vault vaultpkg.Vault) *ArtifactFetcher {
-	return &ArtifactFetcher{
+// NewAssetFetcher creates a new asset fetcher
+func NewAssetFetcher(vault vaultpkg.Vault) *AssetFetcher {
+	return &AssetFetcher{
 		vault: vault,
 	}
 }
 
-// FetchArtifact downloads a single artifact
-func (f *ArtifactFetcher) FetchArtifact(ctx context.Context, artifact *lockfile.Artifact) (zipData []byte, meta *metadata.Metadata, err error) {
+// FetchAsset downloads a single asset
+func (f *AssetFetcher) FetchAsset(ctx context.Context, asset *lockfile.Asset) (zipData []byte, meta *metadata.Metadata, err error) {
 	// Try disk cache first
-	zipData, err = cache.LoadArtifactFromDisk(artifact.Name, artifact.Version)
+	zipData, err = cache.LoadAssetFromDisk(asset.Name, asset.Version)
 	if err == nil {
 		// Cache hit, extract metadata and return
 		metadataBytes, err := utils.ReadZipFile(zipData, "metadata.toml")
 		if err == nil {
 			meta, err = metadata.Parse(metadataBytes)
 			if err == nil && meta.Validate() == nil {
-				// Valid cached artifact
+				// Valid cached asset
 				return zipData, meta, nil
 			}
 		}
 		// Cache corrupted, fall through to download
 	}
 
-	// Cache miss or invalid, download artifact
-	zipData, err = f.vault.GetArtifact(ctx, artifact)
+	// Cache miss or invalid, download asset
+	zipData, err = f.vault.GetAsset(ctx, asset)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to download artifact: %w", err)
+		return nil, nil, fmt.Errorf("failed to download asset: %w", err)
 	}
 
 	// Verify it's a valid zip
@@ -71,23 +71,23 @@ func (f *ArtifactFetcher) FetchArtifact(ctx context.Context, artifact *lockfile.
 	}
 
 	// Cache to disk for future use
-	_ = cache.SaveArtifactToDisk(artifact.Name, artifact.Version, zipData)
+	_ = cache.SaveAssetToDisk(asset.Name, asset.Version, zipData)
 	// Ignore cache save errors - not critical
 
 	return zipData, meta, nil
 }
 
-// FetchArtifactWithProgress downloads a single artifact with progress bar
-func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifact *lockfile.Artifact, bar *progressbar.ProgressBar) (zipData []byte, meta *metadata.Metadata, err error) {
+// FetchAssetWithProgress downloads a single asset with progress bar
+func (f *AssetFetcher) FetchAssetWithProgress(ctx context.Context, asset *lockfile.Asset, bar *progressbar.ProgressBar) (zipData []byte, meta *metadata.Metadata, err error) {
 	// Try disk cache first
-	zipData, err = cache.LoadArtifactFromDisk(artifact.Name, artifact.Version)
+	zipData, err = cache.LoadAssetFromDisk(asset.Name, asset.Version)
 	if err == nil {
 		// Cache hit, extract metadata and return
 		metadataBytes, err := utils.ReadZipFile(zipData, "metadata.toml")
 		if err == nil {
 			meta, err = metadata.Parse(metadataBytes)
 			if err == nil && meta.Validate() == nil {
-				// Valid cached artifact - complete progress bar immediately
+				// Valid cached asset - complete progress bar immediately
 				if bar != nil {
 					bar.ChangeMax64(int64(len(zipData)))
 					_ = bar.Set64(int64(len(zipData)))
@@ -98,10 +98,10 @@ func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifac
 		// Cache corrupted, fall through to download
 	}
 
-	// Download artifact through repository (handles auth properly)
-	zipData, err = f.vault.GetArtifact(ctx, artifact)
+	// Download asset through vault (handles auth properly)
+	zipData, err = f.vault.GetAsset(ctx, asset)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to download artifact: %w", err)
+		return nil, nil, fmt.Errorf("failed to download asset: %w", err)
 	}
 
 	// Update progress bar to 100% after download
@@ -132,21 +132,21 @@ func (f *ArtifactFetcher) FetchArtifactWithProgress(ctx context.Context, artifac
 	}
 
 	// Cache to disk for future use
-	_ = cache.SaveArtifactToDisk(artifact.Name, artifact.Version, zipData)
+	_ = cache.SaveAssetToDisk(asset.Name, asset.Version, zipData)
 	// Ignore cache save errors - not critical
 
 	return zipData, meta, nil
 }
 
-// FetchArtifacts downloads multiple artifacts in parallel
-func (f *ArtifactFetcher) FetchArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, concurrency int) ([]DownloadResult, error) {
+// FetchAssets downloads multiple assets in parallel
+func (f *AssetFetcher) FetchAssets(ctx context.Context, assets []*lockfile.Asset, concurrency int) ([]DownloadResult, error) {
 	if concurrency <= 0 {
 		concurrency = 10 // Default
 	}
 
-	results := make([]DownloadResult, len(artifacts))
-	tasks := make(chan DownloadTask, len(artifacts))
-	resultChan := make(chan DownloadResult, len(artifacts))
+	results := make([]DownloadResult, len(assets))
+	tasks := make(chan DownloadTask, len(assets))
+	resultChan := make(chan DownloadResult, len(assets))
 
 	// Create worker pool
 	var wg sync.WaitGroup
@@ -158,20 +158,20 @@ func (f *ArtifactFetcher) FetchArtifacts(ctx context.Context, artifacts []*lockf
 				select {
 				case <-ctx.Done():
 					resultChan <- DownloadResult{
-						Artifact: task.Artifact,
-						Error:    ctx.Err(),
-						Index:    task.Index,
+						Asset: task.Asset,
+						Error: ctx.Err(),
+						Index: task.Index,
 					}
 					return
 				default:
 				}
 
-				// Create progress bar for this artifact if not in silent mode
+				// Create progress bar for this asset if not in silent mode
 				var bar *progressbar.ProgressBar
 				if !config.IsSilent() {
 					bar = progressbar.NewOptions64(
 						-1, // Unknown size initially
-						progressbar.OptionSetDescription(fmt.Sprintf("[%d/%d] %s", task.Index+1, len(artifacts), task.Artifact.Name)),
+						progressbar.OptionSetDescription(fmt.Sprintf("[%d/%d] %s", task.Index+1, len(assets), task.Asset.Name)),
 						progressbar.OptionSetWidth(30),
 						progressbar.OptionShowBytes(true),
 						progressbar.OptionSetPredictTime(true),
@@ -179,14 +179,14 @@ func (f *ArtifactFetcher) FetchArtifacts(ctx context.Context, artifacts []*lockf
 					)
 				}
 
-				zipData, meta, err := f.FetchArtifactWithProgress(ctx, task.Artifact, bar)
+				zipData, meta, err := f.FetchAssetWithProgress(ctx, task.Asset, bar)
 
 				if bar != nil {
 					_ = bar.Finish()
 				}
 
 				resultChan <- DownloadResult{
-					Artifact: task.Artifact,
+					Asset:    task.Asset,
 					ZipData:  zipData,
 					Metadata: meta,
 					Error:    err,
@@ -198,10 +198,10 @@ func (f *ArtifactFetcher) FetchArtifacts(ctx context.Context, artifacts []*lockf
 
 	// Send tasks
 	go func() {
-		for i, artifact := range artifacts {
+		for i, asset := range assets {
 			tasks <- DownloadTask{
-				Artifact: artifact,
-				Index:    i,
+				Asset: asset,
+				Index: i,
 			}
 		}
 		close(tasks)

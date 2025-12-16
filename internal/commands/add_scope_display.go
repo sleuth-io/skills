@@ -9,7 +9,7 @@ import (
 )
 
 // formatRepository formats a repository entry for display
-func formatRepository(repo lockfile.Repository) string {
+func formatRepository(repo lockfile.Scope) string {
 	if len(repo.Paths) == 0 {
 		return fmt.Sprintf("%s (entire repository)", repo.Repo)
 	}
@@ -24,8 +24,8 @@ func formatPaths(paths []string) string {
 	return strings.Join(paths, ", ")
 }
 
-// displayCurrentInstallation shows the current installation state of an artifact
-func displayCurrentInstallation(currentRepos []lockfile.Repository, styledOut *ui.Output) {
+// displayCurrentInstallation shows the current installation state of an asset
+func displayCurrentInstallation(currentRepos []lockfile.Scope, styledOut *ui.Output) {
 	styledOut.Newline()
 	styledOut.Info("Current installation:")
 
@@ -50,7 +50,7 @@ func displayCurrentInstallation(currentRepos []lockfile.Repository, styledOut *u
 }
 
 // displayRepositoryList shows a numbered list of current repositories
-func displayRepositoryList(repos []lockfile.Repository, styledOut *ui.Output) {
+func displayRepositoryList(repos []lockfile.Scope, styledOut *ui.Output) {
 	styledOut.Newline()
 	if len(repos) == 0 {
 		styledOut.Muted("  (none - currently global or not installed)")
@@ -64,7 +64,7 @@ func displayRepositoryList(repos []lockfile.Repository, styledOut *ui.Output) {
 }
 
 // repositoriesEqual checks if two repository slices are equal
-func repositoriesEqual(a, b []lockfile.Repository) bool {
+func repositoriesEqual(a, b []lockfile.Scope) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -100,7 +100,7 @@ func repositoriesEqual(a, b []lockfile.Repository) bool {
 
 // displayRepositoryChanges shows a diff-style preview of repository changes
 // Returns true if changes were detected, false otherwise
-func displayRepositoryChanges(before, after []lockfile.Repository, styledOut *ui.Output) bool {
+func displayRepositoryChanges(before, after []lockfile.Scope, styledOut *ui.Output) bool {
 	// Check if there are any changes
 	if repositoriesEqual(before, after) {
 		return false
@@ -123,7 +123,7 @@ func displayRepositoryChanges(before, after []lockfile.Repository, styledOut *ui
 	// Find removed repositories
 	for repo, paths := range beforeMap {
 		if _, exists := afterMap[repo]; !exists {
-			repoFormatted := formatRepository(lockfile.Repository{Repo: repo, Paths: paths})
+			repoFormatted := formatRepository(lockfile.Scope{Repo: repo, Paths: paths})
 			styledOut.Printf("  - Removed: %s\n", styledOut.MutedText(repoFormatted))
 		}
 	}
@@ -131,7 +131,7 @@ func displayRepositoryChanges(before, after []lockfile.Repository, styledOut *ui
 	// Find added repositories
 	for repo, paths := range afterMap {
 		if _, exists := beforeMap[repo]; !exists {
-			repoFormatted := formatRepository(lockfile.Repository{Repo: repo, Paths: paths})
+			repoFormatted := formatRepository(lockfile.Scope{Repo: repo, Paths: paths})
 			styledOut.Success(fmt.Sprintf("Added: %s", repoFormatted))
 		}
 	}

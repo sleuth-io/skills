@@ -26,14 +26,14 @@ import (
 
 // ConfigOutput represents the full config output for JSON serialization
 type ConfigOutput struct {
-	Version      VersionInfo      `json:"version"`
-	Platform     PlatformInfo     `json:"platform"`
-	Config       ConfigInfo       `json:"config"`
-	Directories  DirectoryInfo    `json:"directories"`
-	Clients      []ClientInfo     `json:"clients"`
-	CurrentScope *scope.Scope     `json:"currentScope,omitempty"`
-	Artifacts    []ScopeArtifacts `json:"artifacts"`
-	RecentLogs   []string         `json:"recentLogs"`
+	Version      VersionInfo   `json:"version"`
+	Platform     PlatformInfo  `json:"platform"`
+	Config       ConfigInfo    `json:"config"`
+	Directories  DirectoryInfo `json:"directories"`
+	Clients      []ClientInfo  `json:"clients"`
+	CurrentScope *scope.Scope  `json:"currentScope,omitempty"`
+	Assets       []ScopeAssets `json:"assets"`
+	RecentLogs   []string      `json:"recentLogs"`
 }
 
 type VersionInfo struct {
@@ -59,7 +59,7 @@ type ConfigInfo struct {
 type DirectoryInfo struct {
 	Config         string `json:"config"`
 	Cache          string `json:"cache"`
-	Artifacts      string `json:"artifacts"`
+	Assets         string `json:"assets"`
 	GitRepos       string `json:"gitRepos"`
 	LockFiles      string `json:"lockFiles"`
 	InstalledState string `json:"installedState"`
@@ -76,31 +76,31 @@ type ClientInfo struct {
 	Supports       []string `json:"supports"`
 }
 
-type ScopeArtifacts struct {
-	Scope           string         `json:"scope"`
-	TrackerPath     string         `json:"trackerPath"`
-	LockFileVersion string         `json:"lockFileVersion,omitempty"`
-	InstalledAt     string         `json:"installedAt,omitempty"`
-	Artifacts       []ArtifactInfo `json:"artifacts"`
+type ScopeAssets struct {
+	Scope           string      `json:"scope"`
+	TrackerPath     string      `json:"trackerPath"`
+	LockFileVersion string      `json:"lockFileVersion,omitempty"`
+	InstalledAt     string      `json:"installedAt,omitempty"`
+	Assets          []AssetInfo `json:"assets"`
 }
 
-// ArtifactStatus represents the installation status of an artifact
-type ArtifactStatus string
+// AssetStatus represents the installation status of an asset
+type AssetStatus string
 
 const (
-	StatusInstalled    ArtifactStatus = "installed"     // Installed and matches lock file
-	StatusOutdated     ArtifactStatus = "outdated"      // Installed but different version
-	StatusNotInstalled ArtifactStatus = "not_installed" // In lock file but not installed
-	StatusOrphaned     ArtifactStatus = "orphaned"      // Installed but not in lock file
+	StatusInstalled    AssetStatus = "installed"     // Installed and matches lock file
+	StatusOutdated     AssetStatus = "outdated"      // Installed but different version
+	StatusNotInstalled AssetStatus = "not_installed" // In lock file but not installed
+	StatusOrphaned     AssetStatus = "orphaned"      // Installed but not in lock file
 )
 
-type ArtifactInfo struct {
-	Name             string         `json:"name"`
-	Version          string         `json:"version"`
-	InstalledVersion string         `json:"installedVersion,omitempty"` // If different from Version
-	Type             string         `json:"type"`
-	Clients          []string       `json:"clients"`
-	Status           ArtifactStatus `json:"status"`
+type AssetInfo struct {
+	Name             string      `json:"name"`
+	Version          string      `json:"version"`
+	InstalledVersion string      `json:"installedVersion,omitempty"` // If different from Version
+	Type             string      `json:"type"`
+	Clients          []string    `json:"clients"`
+	Status           AssetStatus `json:"status"`
 }
 
 // NewConfigCommand creates the config command
@@ -174,8 +174,8 @@ func gatherConfigInfo(showAll bool) ConfigOutput {
 	// Client info
 	output.Clients = gatherClientInfo()
 
-	// Unified artifact list with status
-	output.Artifacts = gatherUnifiedArtifacts(currentScope, showAll)
+	// Unified asset list with status
+	output.Assets = gatherUnifiedAssets(currentScope, showAll)
 
 	// Recent logs
 	output.RecentLogs = gatherRecentLogs(5)
@@ -204,7 +204,7 @@ func gatherConfigDetails() ConfigInfo {
 func gatherDirectoryInfo() DirectoryInfo {
 	configDir, _ := utils.GetConfigDir()
 	cacheDir, _ := cache.GetCacheDir()
-	artifactsDir, _ := cache.GetArtifactCacheDir()
+	assetsDir, _ := cache.GetAssetCacheDir()
 	gitReposDir, _ := cache.GetGitReposCacheDir()
 	lockFilesDir, _ := cache.GetLockFileCacheDir()
 	trackerDir, _ := cache.GetTrackerCacheDir()
@@ -217,7 +217,7 @@ func gatherDirectoryInfo() DirectoryInfo {
 	return DirectoryInfo{
 		Config:         configDir,
 		Cache:          cacheDir,
-		Artifacts:      artifactsDir,
+		Assets:         assetsDir,
 		GitRepos:       gitReposDir,
 		LockFiles:      lockFilesDir,
 		InstalledState: trackerDir,
@@ -264,7 +264,7 @@ func getClientDirectory(clientID string) string {
 func getClientSupportedTypes(client clients.Client) []string {
 	var supported []string
 	for _, t := range asset.AllTypes() {
-		if client.SupportsArtifactType(t) {
+		if client.SupportsAssetType(t) {
 			supported = append(supported, t.Key)
 		}
 	}
@@ -301,69 +301,69 @@ func checkHooksInstalled(clientID, clientDir string) bool {
 	return false
 }
 
-// groupArtifactsByScope groups lock file artifacts by scope (repo URL or "Global")
-// An artifact may appear in multiple scopes if it has multiple repositories
-func groupArtifactsByScope(lf *lockfile.LockFile, currentScope *scope.Scope, showAll bool) map[string][]*lockfile.Artifact {
+// groupAssetsByScope groups lock file assets by scope (repo URL or "Global")
+// An asset may appear in multiple scopes if it has multiple repositories
+func groupAssetsByScope(lf *lockfile.LockFile, currentScope *scope.Scope, showAll bool) map[string][]*lockfile.Asset {
 	var matcher *scope.Matcher
 	if currentScope != nil {
 		matcher = scope.NewMatcher(currentScope)
 	}
 
-	grouped := make(map[string][]*lockfile.Artifact)
-	for i := range lf.Artifacts {
-		art := &lf.Artifacts[i]
+	grouped := make(map[string][]*lockfile.Asset)
+	for i := range lf.Assets {
+		asset := &lf.Assets[i]
 
 		// Filter by scope if not showing all
-		if !showAll && matcher != nil && !matcher.MatchesArtifact(art) {
+		if !showAll && matcher != nil && !matcher.MatchesAsset(asset) {
 			continue
 		}
 
-		if art.IsGlobal() {
-			grouped["Global"] = append(grouped["Global"], art)
+		if asset.IsGlobal() {
+			grouped["Global"] = append(grouped["Global"], asset)
 		} else {
 			// Add to each repository scope
-			for _, repo := range art.Repositories {
-				grouped[repo.Repo] = append(grouped[repo.Repo], art)
+			for _, repo := range asset.Scopes {
+				grouped[repo.Repo] = append(grouped[repo.Repo], asset)
 			}
 		}
 	}
 	return grouped
 }
 
-// getLatestVersion finds the latest version for a given artifact name in a list
-func getLatestVersion(artifacts []*lockfile.Artifact) *lockfile.Artifact {
-	var latest *lockfile.Artifact
-	for _, art := range artifacts {
-		if latest == nil || art.Version > latest.Version {
-			latest = art
+// getLatestVersion finds the latest version for a given asset name in a list
+func getLatestVersion(assets []*lockfile.Asset) *lockfile.Asset {
+	var latest *lockfile.Asset
+	for _, asset := range assets {
+		if latest == nil || asset.Version > latest.Version {
+			latest = asset
 		}
 	}
 	return latest
 }
 
-// determineArtifactStatus determines the installation status of an artifact
-func determineArtifactStatus(art *lockfile.Artifact, scopeName string, tracker *assets.Tracker) (ArtifactStatus, string, []string) {
+// determineAssetStatus determines the installation status of an asset
+func determineAssetStatus(asset *lockfile.Asset, scopeName string, tracker *assets.Tracker) (AssetStatus, string, []string) {
 	if tracker == nil {
-		return StatusNotInstalled, "", art.Clients
+		return StatusNotInstalled, "", asset.Clients
 	}
 
-	var installed *assets.InstalledArtifact
-	if art.IsGlobal() {
-		// Global artifacts: check with empty repo/path
-		installed = tracker.FindArtifactWithMatcher(art.Name, "", "", scope.MatchRepoURLs)
+	var installed *assets.InstalledAsset
+	if asset.IsGlobal() {
+		// Global assets: check with empty repo/path
+		installed = tracker.FindAssetWithMatcher(asset.Name, "", "", scope.MatchRepoURLs)
 	} else {
-		// Scoped artifacts: check using the artifact's own repo scope
+		// Scoped assets: check using the asset's own repo scope
 		// For the current scope we're displaying, find the matching repo entry
-		for _, repo := range art.Repositories {
+		for _, repo := range asset.Scopes {
 			if scope.MatchRepoURLs(repo.Repo, scopeName) {
 				// Check repo-scoped installation
-				installed = tracker.FindArtifactWithMatcher(art.Name, repo.Repo, "", scope.MatchRepoURLs)
+				installed = tracker.FindAssetWithMatcher(asset.Name, repo.Repo, "", scope.MatchRepoURLs)
 				if installed != nil {
 					break
 				}
 				// Also check path-scoped installations
 				for _, path := range repo.Paths {
-					installed = tracker.FindArtifactWithMatcher(art.Name, repo.Repo, path, scope.MatchRepoURLs)
+					installed = tracker.FindAssetWithMatcher(asset.Name, repo.Repo, path, scope.MatchRepoURLs)
 					if installed != nil {
 						break
 					}
@@ -376,16 +376,16 @@ func determineArtifactStatus(art *lockfile.Artifact, scopeName string, tracker *
 	}
 
 	if installed != nil {
-		if installed.Version == art.Version {
+		if installed.Version == asset.Version {
 			return StatusInstalled, "", installed.Clients
 		}
 		return StatusOutdated, installed.Version, installed.Clients
 	}
-	return StatusNotInstalled, "", art.Clients
+	return StatusNotInstalled, "", asset.Clients
 }
 
-// gatherUnifiedArtifacts builds a unified list of artifacts from the lock file with installation status
-func gatherUnifiedArtifacts(currentScope *scope.Scope, showAll bool) []ScopeArtifacts {
+// gatherUnifiedAssets builds a unified list of assets from the lock file with installation status
+func gatherUnifiedAssets(currentScope *scope.Scope, showAll bool) []ScopeAssets {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil
@@ -405,33 +405,33 @@ func gatherUnifiedArtifacts(currentScope *scope.Scope, showAll bool) []ScopeArti
 	// Load tracker for installation status
 	tracker, _ := assets.LoadTracker()
 
-	// Group artifacts by scope
-	grouped := groupArtifactsByScope(lf, currentScope, showAll)
+	// Group assets by scope
+	grouped := groupAssetsByScope(lf, currentScope, showAll)
 
 	// Build result with installation status
-	var scopes []ScopeArtifacts
-	for scopeName, arts := range grouped {
-		s := ScopeArtifacts{
-			Scope:     scopeName,
-			Artifacts: []ArtifactInfo{},
+	var scopes []ScopeAssets
+	for scopeName, scopeAssets := range grouped {
+		s := ScopeAssets{
+			Scope:  scopeName,
+			Assets: []AssetInfo{},
 		}
 
-		// Group by artifact name to find latest version per artifact
-		byName := make(map[string][]*lockfile.Artifact)
-		for _, art := range arts {
-			byName[art.Name] = append(byName[art.Name], art)
+		// Group by asset name to find latest version per asset
+		byName := make(map[string][]*lockfile.Asset)
+		for _, asset := range scopeAssets {
+			byName[asset.Name] = append(byName[asset.Name], asset)
 		}
 
-		// Process each artifact (using latest version only)
+		// Process each asset (using latest version only)
 		for _, versions := range byName {
 			latest := getLatestVersion(versions)
 			if latest == nil {
 				continue
 			}
 
-			status, installedVersion, clients := determineArtifactStatus(latest, scopeName, tracker)
+			status, installedVersion, clients := determineAssetStatus(latest, scopeName, tracker)
 
-			info := ArtifactInfo{
+			info := AssetInfo{
 				Name:             latest.Name,
 				Version:          latest.Version,
 				Type:             latest.Type.Key,
@@ -440,38 +440,38 @@ func gatherUnifiedArtifacts(currentScope *scope.Scope, showAll bool) []ScopeArti
 				InstalledVersion: installedVersion,
 			}
 
-			s.Artifacts = append(s.Artifacts, info)
+			s.Assets = append(s.Assets, info)
 		}
 
 		scopes = append(scopes, s)
 	}
 
-	// Also check for orphaned artifacts (installed but not in lock file)
+	// Also check for orphaned assets (installed but not in lock file)
 	if tracker != nil {
-		// Get installed artifacts for current scope
-		var installedArts []assets.InstalledArtifact
+		// Get installed assets for current scope
+		var installedAssets []assets.InstalledAsset
 		if showAll || currentScope == nil {
-			installedArts = tracker.Artifacts
+			installedAssets = tracker.Assets
 		} else {
-			installedArts = tracker.FindForScope(currentScope.RepoURL, currentScope.RepoPath, scope.MatchRepoURLs)
+			installedAssets = tracker.FindForScope(currentScope.RepoURL, currentScope.RepoPath, scope.MatchRepoURLs)
 		}
 
-		for _, installed := range installedArts {
-			// Check if this artifact is in the lock file
+		for _, installed := range installedAssets {
+			// Check if this asset is in the lock file
 			found := false
-			for i := range lf.Artifacts {
-				if lf.Artifacts[i].Name == installed.Name {
+			for i := range lf.Assets {
+				if lf.Assets[i].Name == installed.Name {
 					found = true
 					break
 				}
 			}
 
 			if !found {
-				// Orphaned artifact - add to appropriate scope
+				// Orphaned asset - add to appropriate scope
 				scopeName := installed.ScopeDescription()
 
 				// Find or create the scope
-				var targetScope *ScopeArtifacts
+				var targetScope *ScopeAssets
 				for i := range scopes {
 					if scopes[i].Scope == scopeName {
 						targetScope = &scopes[i]
@@ -479,14 +479,14 @@ func gatherUnifiedArtifacts(currentScope *scope.Scope, showAll bool) []ScopeArti
 					}
 				}
 				if targetScope == nil {
-					scopes = append(scopes, ScopeArtifacts{
-						Scope:     scopeName,
-						Artifacts: []ArtifactInfo{},
+					scopes = append(scopes, ScopeAssets{
+						Scope:  scopeName,
+						Assets: []AssetInfo{},
 					})
 					targetScope = &scopes[len(scopes)-1]
 				}
 
-				targetScope.Artifacts = append(targetScope.Artifacts, ArtifactInfo{
+				targetScope.Assets = append(targetScope.Assets, AssetInfo{
 					Name:    installed.Name,
 					Version: installed.Version,
 					Type:    installed.Type,
@@ -573,7 +573,7 @@ func printText(output ConfigOutput, showAll bool) error {
 	fmt.Println("-----------")
 	fmt.Printf("Config: %s\n", output.Directories.Config)
 	fmt.Printf("Cache: %s\n", output.Directories.Cache)
-	fmt.Printf("  └─ artifacts/\n")
+	fmt.Printf("  └─ assets/\n")
 	fmt.Printf("  └─ git-repos/\n")
 	fmt.Printf("  └─ lockfiles/\n")
 	fmt.Printf("  └─ installed-state/\n")
@@ -613,39 +613,39 @@ func printText(output ConfigOutput, showAll bool) error {
 		fmt.Println()
 	}
 
-	// Artifacts with status
-	if len(output.Artifacts) > 0 {
-		fmt.Println("Artifacts")
-		fmt.Println("---------")
-		for _, s := range output.Artifacts {
+	// Assets with status
+	if len(output.Assets) > 0 {
+		fmt.Println("Assets")
+		fmt.Println("------")
+		for _, s := range output.Assets {
 			fmt.Printf("%s:\n", s.Scope)
-			for _, art := range s.Artifacts {
+			for _, asset := range s.Assets {
 				clientsStr := ""
-				if len(art.Clients) > 0 {
-					clientsStr = fmt.Sprintf(" → %s", strings.Join(art.Clients, ", "))
+				if len(asset.Clients) > 0 {
+					clientsStr = fmt.Sprintf(" → %s", strings.Join(asset.Clients, ", "))
 				}
 
 				// Format status indicator
 				statusStr := ""
-				switch art.Status {
+				switch asset.Status {
 				case StatusInstalled:
 					statusStr = " (installed)"
 				case StatusOutdated:
-					statusStr = fmt.Sprintf(" (outdated: %s)", art.InstalledVersion)
+					statusStr = fmt.Sprintf(" (outdated: %s)", asset.InstalledVersion)
 				case StatusNotInstalled:
 					statusStr = " (not installed)"
 				case StatusOrphaned:
 					statusStr = " (removed from lock file)"
 				}
 
-				fmt.Printf("  - %s (%s) [%s]%s%s\n", art.Name, art.Version, art.Type, statusStr, clientsStr)
+				fmt.Printf("  - %s (%s) [%s]%s%s\n", asset.Name, asset.Version, asset.Type, statusStr, clientsStr)
 			}
 			fmt.Println()
 		}
 	} else {
-		fmt.Println("Artifacts")
-		fmt.Println("---------")
-		fmt.Println("No artifacts found.")
+		fmt.Println("Assets")
+		fmt.Println("------")
+		fmt.Println("No assets found.")
 		fmt.Println()
 	}
 

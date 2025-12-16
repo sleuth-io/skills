@@ -76,29 +76,29 @@ type UninstallOptions struct {
 	Verbose bool
 }
 
-// ArtifactUninstallPlan contains info needed to uninstall one artifact
-type ArtifactUninstallPlan struct {
+// AssetUninstallPlan contains info needed to uninstall one asset
+type AssetUninstallPlan struct {
 	Name      string
 	Version   string
 	Type      asset.Type
 	IsGlobal  bool
 	Clients   []string // client IDs that have this installed
-	LockEntry *lockfile.Artifact
+	LockEntry *lockfile.Asset
 }
 
 // UninstallPlan contains the complete uninstall plan
 type UninstallPlan struct {
-	Artifacts  []ArtifactUninstallPlan
+	Assets     []AssetUninstallPlan
 	GitContext *gitutil.GitContext
 	TargetBase string // tracking base for updating tracker
 }
 
 // UninstallResult tracks what was uninstalled
 type UninstallResult struct {
-	ArtifactName string
-	ClientID     string
-	Success      bool
-	Error        error
+	AssetName string
+	ClientID  string
+	Success   bool
+	Error     error
 }
 
 // runUninstall executes the uninstall command
@@ -114,7 +114,7 @@ func runUninstall(cmd *cobra.Command, args []string, opts UninstallOptions) erro
 		// If --all is passed, we should still remove system hooks even if lock file fails
 		if opts.All {
 			out.printfErr("Warning: %v\n", err)
-			return handleAllFlagWithoutArtifacts(ctx, opts, out)
+			return handleAllFlagWithoutAssets(ctx, opts, out)
 		}
 		return err
 	}
@@ -125,15 +125,15 @@ func runUninstall(cmd *cobra.Command, args []string, opts UninstallOptions) erro
 		// If --all is passed, we should still remove system hooks even if tracker fails
 		if opts.All {
 			out.printfErr("Warning: %v\n", err)
-			return handleAllFlagWithoutArtifacts(ctx, opts, out)
+			return handleAllFlagWithoutAssets(ctx, opts, out)
 		}
 		return err
 	}
 
-	if len(tracker.Artifacts) == 0 {
-		// No artifacts, but if --all is passed, still remove system hooks
+	if len(tracker.Assets) == 0 {
+		// No assets, but if --all is passed, still remove system hooks
 		if opts.All {
-			return handleAllFlagWithoutArtifacts(ctx, opts, out)
+			return handleAllFlagWithoutAssets(ctx, opts, out)
 		}
 		out.println("No assets installed")
 		return nil
@@ -142,10 +142,10 @@ func runUninstall(cmd *cobra.Command, args []string, opts UninstallOptions) erro
 	// Step 3: Build uninstall plan
 	plan := buildUninstallPlanFromTracker(lockFile, tracker, gitContext, trackingBase)
 
-	if len(plan.Artifacts) == 0 {
-		// No artifacts to uninstall, but if --all is passed, still remove system hooks
+	if len(plan.Assets) == 0 {
+		// No assets to uninstall, but if --all is passed, still remove system hooks
 		if opts.All {
-			return handleAllFlagWithoutArtifacts(ctx, opts, out)
+			return handleAllFlagWithoutAssets(ctx, opts, out)
 		}
 		out.println("No assets to uninstall")
 		return nil
@@ -194,8 +194,8 @@ func runUninstall(cmd *cobra.Command, args []string, opts UninstallOptions) erro
 	return nil
 }
 
-// handleAllFlagWithoutArtifacts handles the --all flag when there are no artifacts to uninstall
-func handleAllFlagWithoutArtifacts(ctx context.Context, opts UninstallOptions, out *outputHelper) error {
+// handleAllFlagWithoutAssets handles the --all flag when there are no assets to uninstall
+func handleAllFlagWithoutAssets(ctx context.Context, opts UninstallOptions, out *outputHelper) error {
 	out.println("No assets to uninstall")
 
 	if !opts.Yes && !opts.DryRun {
@@ -292,10 +292,10 @@ func loadTrackerForUninstall(ctx context.Context, out *outputHelper) (*gitutil.G
 func buildUninstallPlanFromTracker(lockFile *lockfile.LockFile, tracker *assets.Tracker, gitContext *gitutil.GitContext, trackingBase string) UninstallPlan {
 	log := logger.Get()
 
-	// Build artifact lookup from lock file
-	lockFileMap := make(map[string]*lockfile.Artifact)
-	for i := range lockFile.Artifacts {
-		lockFileMap[lockFile.Artifacts[i].Name] = &lockFile.Artifacts[i]
+	// Build asset lookup from lock file
+	lockFileMap := make(map[string]*lockfile.Asset)
+	for i := range lockFile.Assets {
+		lockFileMap[lockFile.Assets[i].Name] = &lockFile.Assets[i]
 	}
 
 	plan := UninstallPlan{
@@ -303,24 +303,24 @@ func buildUninstallPlanFromTracker(lockFile *lockfile.LockFile, tracker *assets.
 		TargetBase: trackingBase,
 	}
 
-	for _, installed := range tracker.Artifacts {
+	for _, installed := range tracker.Assets {
 		lockEntry, found := lockFileMap[installed.Name]
 		if !found {
-			// Artifact in tracker but not in lock file - still uninstall it
-			log.Warn("artifact in tracker but not in lock file", "name", installed.Name)
+			// Asset in tracker but not in lock file - still uninstall it
+			log.Warn("asset in tracker but not in lock file", "name", installed.Name)
 			// Determine type from lock file if possible
-			artType := asset.TypeSkill // Default to skill
-			plan.Artifacts = append(plan.Artifacts, ArtifactUninstallPlan{
+			assetType := asset.TypeSkill // Default to skill
+			plan.Assets = append(plan.Assets, AssetUninstallPlan{
 				Name:     installed.Name,
 				Version:  installed.Version,
-				Type:     artType,
+				Type:     assetType,
 				IsGlobal: installed.IsGlobal(),
 				Clients:  installed.Clients,
 			})
 			continue
 		}
 
-		plan.Artifacts = append(plan.Artifacts, ArtifactUninstallPlan{
+		plan.Assets = append(plan.Assets, AssetUninstallPlan{
 			Name:      installed.Name,
 			Version:   installed.Version,
 			Type:      lockEntry.Type,
@@ -338,9 +338,9 @@ func executeUninstall(ctx context.Context, plan UninstallPlan, opts UninstallOpt
 	var results []UninstallResult
 	registry := clients.Global()
 
-	for _, artPlan := range plan.Artifacts {
-		for _, clientID := range artPlan.Clients {
-			result := uninstallArtifactFromClient(ctx, artPlan, clientID, plan.GitContext, opts, registry, out)
+	for _, assetPlan := range plan.Assets {
+		for _, clientID := range assetPlan.Clients {
+			result := uninstallAssetFromClient(ctx, assetPlan, clientID, plan.GitContext, opts, registry, out)
 			results = append(results, result)
 		}
 	}
@@ -348,28 +348,28 @@ func executeUninstall(ctx context.Context, plan UninstallPlan, opts UninstallOpt
 	return results
 }
 
-// uninstallArtifactFromClient removes a single artifact from a single client
-func uninstallArtifactFromClient(ctx context.Context, artPlan ArtifactUninstallPlan, clientID string, gitContext *gitutil.GitContext, opts UninstallOptions, registry *clients.Registry, out *outputHelper) UninstallResult {
+// uninstallAssetFromClient removes a single asset from a single client
+func uninstallAssetFromClient(ctx context.Context, assetPlan AssetUninstallPlan, clientID string, gitContext *gitutil.GitContext, opts UninstallOptions, registry *clients.Registry, out *outputHelper) UninstallResult {
 	client, err := registry.Get(clientID)
 	if err != nil || client == nil {
 		out.printfErr("  ✗ Client %s not found, skipping\n", clientID)
 		return UninstallResult{
-			ArtifactName: artPlan.Name,
-			ClientID:     clientID,
-			Success:      false,
-			Error:        fmt.Errorf("client not found: %s", clientID),
+			AssetName: assetPlan.Name,
+			ClientID:  clientID,
+			Success:   false,
+			Error:     fmt.Errorf("client not found: %s", clientID),
 		}
 	}
 
-	// Build the correct scope based on artifact's scope from lock file
-	installScope := buildScopeForArtifact(artPlan, gitContext)
+	// Build the correct scope based on asset's scope from lock file
+	installScope := buildScopeForAsset(assetPlan, gitContext)
 
 	req := clients.UninstallRequest{
-		Artifacts: []asset.Asset{
+		Assets: []asset.Asset{
 			{
-				Name:    artPlan.Name,
-				Version: artPlan.Version,
-				Type:    artPlan.Type,
+				Name:    assetPlan.Name,
+				Version: assetPlan.Version,
+				Type:    assetPlan.Type,
 			},
 		},
 		Scope: installScope,
@@ -379,44 +379,44 @@ func uninstallArtifactFromClient(ctx context.Context, artPlan ArtifactUninstallP
 		},
 	}
 
-	resp, err := client.UninstallArtifacts(ctx, req)
+	resp, err := client.UninstallAssets(ctx, req)
 	if err != nil {
-		out.printfErr("  ✗ Failed to uninstall %s from %s: %v\n", artPlan.Name, client.DisplayName(), err)
+		out.printfErr("  ✗ Failed to uninstall %s from %s: %v\n", assetPlan.Name, client.DisplayName(), err)
 		return UninstallResult{
-			ArtifactName: artPlan.Name,
-			ClientID:     clientID,
-			Success:      false,
-			Error:        err,
+			AssetName: assetPlan.Name,
+			ClientID:  clientID,
+			Success:   false,
+			Error:     err,
 		}
 	}
 
 	success := len(resp.Results) > 0 && resp.Results[0].Status == clients.StatusSuccess
 	if success {
-		out.printf("  ✓ Removed %s from %s\n", artPlan.Name, client.DisplayName())
+		out.printf("  ✓ Removed %s from %s\n", assetPlan.Name, client.DisplayName())
 	} else {
 		errMsg := "unknown error"
 		if len(resp.Results) > 0 && resp.Results[0].Error != nil {
 			errMsg = resp.Results[0].Error.Error()
 		}
-		out.printfErr("  ✗ Failed to remove %s from %s: %s\n", artPlan.Name, client.DisplayName(), errMsg)
+		out.printfErr("  ✗ Failed to remove %s from %s: %s\n", assetPlan.Name, client.DisplayName(), errMsg)
 	}
 
 	return UninstallResult{
-		ArtifactName: artPlan.Name,
-		ClientID:     clientID,
-		Success:      success,
+		AssetName: assetPlan.Name,
+		ClientID:  clientID,
+		Success:   success,
 	}
 }
 
-// buildScopeForArtifact creates the correct InstallScope based on artifact's scope
-func buildScopeForArtifact(artPlan ArtifactUninstallPlan, gitContext *gitutil.GitContext) *clients.InstallScope {
-	if artPlan.IsGlobal {
+// buildScopeForAsset creates the correct InstallScope based on asset's scope
+func buildScopeForAsset(assetPlan AssetUninstallPlan, gitContext *gitutil.GitContext) *clients.InstallScope {
+	if assetPlan.IsGlobal {
 		return &clients.InstallScope{
 			Type: clients.ScopeGlobal,
 		}
 	}
 
-	// Non-global artifact - use repo scope
+	// Non-global asset - use repo scope
 	return &clients.InstallScope{
 		Type:     clients.ScopeRepository,
 		RepoRoot: gitContext.RepoRoot,
@@ -424,11 +424,11 @@ func buildScopeForArtifact(artPlan ArtifactUninstallPlan, gitContext *gitutil.Gi
 	}
 }
 
-// updateTracker removes successfully uninstalled artifacts from tracker
+// updateTracker removes successfully uninstalled assets from tracker
 func updateTracker(results []UninstallResult, plan UninstallPlan, out *outputHelper) error {
 	out.println("\nUpdating installation state...")
 
-	fullyRemoved := findFullyRemovedArtifacts(results)
+	fullyRemoved := findFullyRemovedAssets(results)
 	if len(fullyRemoved) == 0 {
 		return nil
 	}
@@ -438,38 +438,38 @@ func updateTracker(results []UninstallResult, plan UninstallPlan, out *outputHel
 		return fmt.Errorf("failed to load tracker: %w", err)
 	}
 
-	// Remove each fully removed artifact
-	for _, artName := range fullyRemoved {
-		// Find the artifact in tracker to get its key
-		for _, art := range tracker.Artifacts {
-			if art.Name == artName {
-				tracker.RemoveArtifact(art.Key())
+	// Remove each fully removed asset
+	for _, assetName := range fullyRemoved {
+		// Find the asset in tracker to get its key
+		for _, a := range tracker.Assets {
+			if a.Name == assetName {
+				tracker.RemoveAsset(a.Key())
 				break
 			}
 		}
 	}
 
-	if len(tracker.Artifacts) == 0 {
+	if len(tracker.Assets) == 0 {
 		return assets.DeleteTracker()
 	}
 
 	return assets.SaveTracker(tracker)
 }
 
-// findFullyRemovedArtifacts returns artifacts where all client removals succeeded
-func findFullyRemovedArtifacts(results []UninstallResult) []string {
-	// Group results by artifact
-	artifactClients := make(map[string]map[string]bool)
+// findFullyRemovedAssets returns assets where all client removals succeeded
+func findFullyRemovedAssets(results []UninstallResult) []string {
+	// Group results by asset
+	assetClients := make(map[string]map[string]bool)
 	for _, result := range results {
-		if _, exists := artifactClients[result.ArtifactName]; !exists {
-			artifactClients[result.ArtifactName] = make(map[string]bool)
+		if _, exists := assetClients[result.AssetName]; !exists {
+			assetClients[result.AssetName] = make(map[string]bool)
 		}
-		artifactClients[result.ArtifactName][result.ClientID] = result.Success
+		assetClients[result.AssetName][result.ClientID] = result.Success
 	}
 
-	// Find artifacts where all succeeded
+	// Find assets where all succeeded
 	var fullyRemoved []string
-	for artName, clientResults := range artifactClients {
+	for assetName, clientResults := range assetClients {
 		allSuccess := true
 		for _, success := range clientResults {
 			if !success {
@@ -478,14 +478,14 @@ func findFullyRemovedArtifacts(results []UninstallResult) []string {
 			}
 		}
 		if allSuccess {
-			fullyRemoved = append(fullyRemoved, artName)
+			fullyRemoved = append(fullyRemoved, assetName)
 		}
 	}
 
 	return fullyRemoved
 }
 
-// regenerateClientSupport calls EnsureSkillsSupport on affected clients
+// regenerateClientSupport calls EnsureAssetSupport on affected clients
 func regenerateClientSupport(ctx context.Context, plan UninstallPlan, results []UninstallResult, out *outputHelper) {
 	affectedClients := make(map[string]bool)
 	for _, result := range results {
@@ -510,7 +510,7 @@ func regenerateClientSupport(ctx context.Context, plan UninstallPlan, results []
 			}
 		}
 
-		if err := client.EnsureSkillsSupport(ctx, scope); err != nil {
+		if err := client.EnsureAssetSupport(ctx, scope); err != nil {
 			out.printfErr("Warning: failed to regenerate support for %s: %v\n", client.DisplayName(), err)
 		}
 	}
@@ -520,13 +520,13 @@ func regenerateClientSupport(ctx context.Context, plan UninstallPlan, results []
 func displayUninstallPlan(plan UninstallPlan, out *outputHelper) {
 	out.println("\nThe following assets will be uninstalled:")
 
-	for _, art := range plan.Artifacts {
+	for _, a := range plan.Assets {
 		scopeDesc := "global"
-		if !art.IsGlobal {
+		if !a.IsGlobal {
 			scopeDesc = "repository"
 		}
-		clientNames := strings.Join(art.Clients, ", ")
-		out.printf("  - %s (%s) v%s [%s] → %s\n", art.Name, art.Type.Label, art.Version, scopeDesc, clientNames)
+		clientNames := strings.Join(a.Clients, ", ")
+		out.printf("  - %s (%s) v%s [%s] → %s\n", a.Name, a.Type.Label, a.Version, scopeDesc, clientNames)
 	}
 
 	out.println()
@@ -566,24 +566,24 @@ func uninstallSystemHooks(ctx context.Context, out *outputHelper) {
 func reportResults(results []UninstallResult, out *outputHelper) {
 	out.println()
 
-	removedArtifacts := make(map[string]bool)
-	failedArtifacts := make(map[string]bool)
+	removedAssets := make(map[string]bool)
+	failedAssets := make(map[string]bool)
 
 	for _, result := range results {
 		if result.Success {
-			removedArtifacts[result.ArtifactName] = true
+			removedAssets[result.AssetName] = true
 		} else {
-			failedArtifacts[result.ArtifactName] = true
+			failedAssets[result.AssetName] = true
 		}
 	}
 
 	// Don't count as failed if also successfully removed
-	for name := range removedArtifacts {
-		delete(failedArtifacts, name)
+	for name := range removedAssets {
+		delete(failedAssets, name)
 	}
 
-	totalRemoved := len(removedArtifacts)
-	totalFailed := len(failedArtifacts)
+	totalRemoved := len(removedAssets)
+	totalFailed := len(failedAssets)
 
 	if totalFailed > 0 {
 		out.printf("Uninstalled %d asset(s) (%d failed)\n", totalRemoved, totalFailed)

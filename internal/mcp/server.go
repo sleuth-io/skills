@@ -159,10 +159,10 @@ func (s *Server) ReportSkillUsage(skillName, skillVersion string) {
 
 	// Create usage event
 	usageEvent := stats.UsageEvent{
-		ArtifactName:    skillName,
-		ArtifactVersion: skillVersion,
-		ArtifactType:    "skill",
-		Timestamp:       time.Now().UTC().Format(time.RFC3339),
+		AssetName:    skillName,
+		AssetVersion: skillVersion,
+		AssetType:    "skill",
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 	}
 
 	// Enqueue event (fast, local file write)

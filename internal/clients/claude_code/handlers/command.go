@@ -12,7 +12,7 @@ import (
 	"github.com/sleuth-io/skills/internal/utils"
 )
 
-// CommandHandler handles command artifact installation
+// CommandHandler handles command asset installation
 type CommandHandler struct {
 	metadata *metadata.Metadata
 }
@@ -24,7 +24,7 @@ func NewCommandHandler(meta *metadata.Metadata) *CommandHandler {
 	}
 }
 
-// DetectType returns true if files indicate this is a command artifact
+// DetectType returns true if files indicate this is a command asset
 func (h *CommandHandler) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "COMMAND.md" || file == "command.md" {
@@ -34,7 +34,7 @@ func (h *CommandHandler) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *CommandHandler) GetType() string {
 	return "command"
 }
@@ -43,7 +43,7 @@ func (h *CommandHandler) GetType() string {
 func (h *CommandHandler) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeCommand,
@@ -92,7 +92,7 @@ func (h *CommandHandler) DetectUsageFromToolCall(toolName string, toolInput map[
 	return commandName, true
 }
 
-// Install extracts and installs the command artifact
+// Install extracts and installs the command asset
 func (h *CommandHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
 	// Validate zip structure
 	if err := h.Validate(zipData); err != nil {
@@ -129,7 +129,7 @@ func (h *CommandHandler) Install(ctx context.Context, zipData []byte, targetBase
 	return nil
 }
 
-// Remove uninstalls the command artifact
+// Remove uninstalls the command asset
 func (h *CommandHandler) Remove(ctx context.Context, targetBase string) error {
 	installPath := filepath.Join(targetBase, h.GetInstallPath())
 
@@ -150,10 +150,10 @@ func (h *CommandHandler) Remove(ctx context.Context, targetBase string) error {
 
 // GetInstallPath returns the installation path relative to targetBase
 func (h *CommandHandler) GetInstallPath() string {
-	return filepath.Join("commands", h.metadata.Artifact.Name+".md")
+	return filepath.Join("commands", h.metadata.Asset.Name+".md")
 }
 
-// Validate checks if the zip structure is valid for a command artifact
+// Validate checks if the zip structure is valid for a command asset
 func (h *CommandHandler) Validate(zipData []byte) error {
 	// List files in zip
 	files, err := utils.ListZipFiles(zipData)
@@ -182,9 +182,9 @@ func (h *CommandHandler) Validate(zipData []byte) error {
 		return fmt.Errorf("metadata validation failed: %w", err)
 	}
 
-	// Verify artifact type matches
-	if meta.Artifact.Type != asset.TypeCommand {
-		return fmt.Errorf("artifact type mismatch: expected command, got %s", meta.Artifact.Type)
+	// Verify asset type matches
+	if meta.Asset.Type != asset.TypeCommand {
+		return fmt.Errorf("asset type mismatch: expected command, got %s", meta.Asset.Type)
 	}
 
 	// Check that prompt file exists
@@ -249,8 +249,8 @@ func (h *CommandHandler) VerifyInstalled(targetBase string) (bool, string) {
 		return false, "failed to parse metadata: " + err.Error()
 	}
 
-	if meta.Artifact.Version != h.metadata.Artifact.Version {
-		return false, fmt.Sprintf("version mismatch: installed %s, expected %s", meta.Artifact.Version, h.metadata.Artifact.Version)
+	if meta.Asset.Version != h.metadata.Asset.Version {
+		return false, fmt.Sprintf("version mismatch: installed %s, expected %s", meta.Asset.Version, h.metadata.Asset.Version)
 	}
 
 	return true, "installed"

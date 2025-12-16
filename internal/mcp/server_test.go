@@ -29,15 +29,15 @@ func newMockClient() *mockClient {
 func (m *mockClient) IsInstalled() bool  { return true }
 func (m *mockClient) GetVersion() string { return "1.0.0" }
 
-func (m *mockClient) InstallArtifacts(ctx context.Context, req clients.InstallRequest) (clients.InstallResponse, error) {
+func (m *mockClient) InstallAssets(ctx context.Context, req clients.InstallRequest) (clients.InstallResponse, error) {
 	return clients.InstallResponse{}, nil
 }
 
-func (m *mockClient) UninstallArtifacts(ctx context.Context, req clients.UninstallRequest) (clients.UninstallResponse, error) {
+func (m *mockClient) UninstallAssets(ctx context.Context, req clients.UninstallRequest) (clients.UninstallResponse, error) {
 	return clients.UninstallResponse{}, nil
 }
 
-func (m *mockClient) ListSkills(ctx context.Context, scope *clients.InstallScope) ([]clients.InstalledSkill, error) {
+func (m *mockClient) ListAssets(ctx context.Context, scope *clients.InstallScope) ([]clients.InstalledSkill, error) {
 	skills := make([]clients.InstalledSkill, 0, len(m.skills))
 	for _, s := range m.skills {
 		skills = append(skills, clients.InstalledSkill{
@@ -55,7 +55,7 @@ func (m *mockClient) ReadSkill(ctx context.Context, name string, scope *clients.
 	return nil, os.ErrNotExist
 }
 
-func (m *mockClient) EnsureSkillsSupport(ctx context.Context, scope *clients.InstallScope) error {
+func (m *mockClient) EnsureAssetSupport(ctx context.Context, scope *clients.InstallScope) error {
 	return nil
 }
 
@@ -71,7 +71,7 @@ func (m *mockClient) ShouldInstall(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (m *mockClient) VerifyArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, scope *clients.InstallScope) []clients.VerifyResult {
+func (m *mockClient) VerifyAssets(ctx context.Context, assets []*lockfile.Asset, scope *clients.InstallScope) []clients.VerifyResult {
 	return nil
 }
 
@@ -197,7 +197,7 @@ func TestServer_Integration(t *testing.T) {
 	}
 
 	// Create metadata.toml
-	metadata := `[artifact]
+	metadata := `[asset]
 name = "integration-skill"
 type = "skill"
 description = "An integration test skill"

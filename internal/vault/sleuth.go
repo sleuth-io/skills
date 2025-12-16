@@ -59,7 +59,7 @@ func (s *SleuthVault) Authenticate(ctx context.Context) (string, error) {
 
 // GetLockFile retrieves the lock file from the Sleuth server
 func (s *SleuthVault) GetLockFile(ctx context.Context, cachedETag string) (content []byte, etag string, notModified bool, err error) {
-	endpoint := s.serverURL + "/api/sx/sx.lock"
+	endpoint := s.serverURL + "/api/skills/sx.lock"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
@@ -103,23 +103,23 @@ func (s *SleuthVault) GetLockFile(ctx context.Context, cachedETag string) (conte
 	return data, newETag, false, nil
 }
 
-// GetArtifact downloads an artifact using its source configuration
-func (s *SleuthVault) GetArtifact(ctx context.Context, artifact *lockfile.Artifact) ([]byte, error) {
-	// Dispatch to appropriate source handler based on artifact source type
-	switch artifact.GetSourceType() {
+// GetAsset downloads an asset using its source configuration
+func (s *SleuthVault) GetAsset(ctx context.Context, asset *lockfile.Asset) ([]byte, error) {
+	// Dispatch to appropriate source handler based on asset source type
+	switch asset.GetSourceType() {
 	case "http":
-		return s.httpHandler.Fetch(ctx, artifact)
+		return s.httpHandler.Fetch(ctx, asset)
 	case "path":
-		return s.pathHandler.Fetch(ctx, artifact)
+		return s.pathHandler.Fetch(ctx, asset)
 	case "git":
-		return s.gitHandler.Fetch(ctx, artifact)
+		return s.gitHandler.Fetch(ctx, asset)
 	default:
-		return nil, fmt.Errorf("unsupported source type: %s", artifact.GetSourceType())
+		return nil, fmt.Errorf("unsupported source type: %s", asset.GetSourceType())
 	}
 }
 
-// AddArtifact uploads an artifact to the Sleuth server
-func (s *SleuthVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifact, zipData []byte) error {
+// AddAsset uploads an asset to the Sleuth server
+func (s *SleuthVault) AddAsset(ctx context.Context, asset *lockfile.Asset, zipData []byte) error {
 	endpoint := s.serverURL + "/api/skills/artifacts"
 
 	// Create multipart writer
@@ -127,7 +127,7 @@ func (s *SleuthVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifa
 	writer := multipart.NewWriter(body)
 
 	// Add file part
-	part, err := writer.CreateFormFile("file", fmt.Sprintf("%s-%s.zip", artifact.Name, artifact.Version))
+	part, err := writer.CreateFormFile("file", fmt.Sprintf("%s-%s.zip", asset.Name, asset.Version))
 	if err != nil {
 		return fmt.Errorf("failed to create form file: %w", err)
 	}
@@ -136,9 +136,9 @@ func (s *SleuthVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifa
 	}
 
 	// Add metadata fields
-	_ = writer.WriteField("name", artifact.Name)
-	_ = writer.WriteField("version", artifact.Version)
-	_ = writer.WriteField("type", artifact.Type.Key)
+	_ = writer.WriteField("name", asset.Name)
+	_ = writer.WriteField("version", asset.Version)
+	_ = writer.WriteField("type", asset.Type.Key)
 
 	// Close writer
 	if err := writer.Close(); err != nil {
@@ -160,7 +160,7 @@ func (s *SleuthVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifa
 	// Execute request
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to upload artifact: %w", err)
+		return fmt.Errorf("failed to upload asset: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -171,12 +171,12 @@ func (s *SleuthVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifa
 
 	// Parse response
 	var uploadResp struct {
-		Success  bool `json:"success"`
-		Artifact struct {
+		Success bool `json:"success"`
+		Asset   struct {
 			Name    string `json:"name"`
 			Version string `json:"version"`
 			URL     string `json:"url"`
-		} `json:"artifact"`
+		} `json:"asset"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil {
@@ -187,17 +187,17 @@ func (s *SleuthVault) AddArtifact(ctx context.Context, artifact *lockfile.Artifa
 		return fmt.Errorf("upload failed: server returned success=false")
 	}
 
-	// Update artifact with source information if server returns URL
-	if uploadResp.Artifact.URL != "" {
-		artifact.SourceHTTP = &lockfile.SourceHTTP{
-			URL: uploadResp.Artifact.URL,
+	// Update asset with source information if server returns URL
+	if uploadResp.Asset.URL != "" {
+		asset.SourceHTTP = &lockfile.SourceHTTP{
+			URL: uploadResp.Asset.URL,
 		}
 	}
 
 	return nil
 }
 
-// GetVersionList retrieves available versions for an artifact
+// GetVersionList retrieves available versions for an asset
 func (s *SleuthVault) GetVersionList(ctx context.Context, name string) ([]string, error) {
 	endpoint := fmt.Sprintf("%s/api/skills/artifacts/%s/list.txt", s.serverURL, name)
 
@@ -232,7 +232,7 @@ func (s *SleuthVault) GetVersionList(ctx context.Context, name string) ([]string
 	return parseVersionList(body), nil
 }
 
-// GetMetadata retrieves metadata for a specific artifact version
+// GetMetadata retrieves metadata for a specific asset version
 func (s *SleuthVault) GetMetadata(ctx context.Context, name, version string) (*metadata.Metadata, error) {
 	endpoint := fmt.Sprintf("%s/api/skills/artifacts/%s/%s/metadata.toml", s.serverURL, name, version)
 
@@ -266,7 +266,7 @@ func (s *SleuthVault) GetMetadata(ctx context.Context, name, version string) (*m
 	return metadata.Parse(data)
 }
 
-// VerifyIntegrity checks hashes and sizes for downloaded artifacts
+// VerifyIntegrity checks hashes and sizes for downloaded assets
 func (s *SleuthVault) VerifyIntegrity(data []byte, hashes map[string]string, size int64) error {
 	// Verify size if provided
 	if size > 0 {
@@ -279,7 +279,7 @@ func (s *SleuthVault) VerifyIntegrity(data []byte, hashes map[string]string, siz
 	return s.httpHandler.verifyHashes(data, hashes)
 }
 
-// PostUsageStats sends artifact usage statistics to the Sleuth server
+// PostUsageStats sends asset usage statistics to the Sleuth server
 func (s *SleuthVault) PostUsageStats(ctx context.Context, jsonlData string) error {
 	endpoint := s.serverURL + "/api/skills/usage"
 

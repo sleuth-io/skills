@@ -15,12 +15,12 @@ import (
 	"github.com/sleuth-io/skills/internal/vault"
 )
 
-// UsageEvent represents a single artifact usage event
+// UsageEvent represents a single asset usage event
 type UsageEvent struct {
-	ArtifactName    string `json:"artifact_name"`
-	ArtifactVersion string `json:"artifact_version"`
-	ArtifactType    string `json:"artifact_type"`
-	Timestamp       string `json:"timestamp"`
+	AssetName    string `json:"asset_name"`
+	AssetVersion string `json:"asset_version"`
+	AssetType    string `json:"asset_type"`
+	Timestamp    string `json:"timestamp"`
 }
 
 // GetQueuePath returns the path to the usage queue directory

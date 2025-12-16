@@ -49,7 +49,7 @@ func TestCursorIntegration(t *testing.T) {
 	}()
 
 	// Create a test skill with metadata
-	skillMetadata := `[artifact]
+	skillMetadata := `[asset]
 name = "test-skill"
 type = "skill"
 description = "A test skill"
@@ -86,7 +86,7 @@ prompt-file = "SKILL.md"
 
 	// Create add command with mock prompter
 	mockPrompter := NewMockPrompter().
-		ExpectConfirm("correct", true).       // Confirm artifact name/type
+		ExpectConfirm("correct", true).       // Confirm asset name/type
 		ExpectPrompt("Version", "1.0.0").     // Enter version
 		ExpectPrompt("Choose an option", "1") // Installation scope: make available globally
 
@@ -97,10 +97,10 @@ prompt-file = "SKILL.md"
 		t.Fatalf("Failed to add skill: %v", err)
 	}
 
-	// Verify artifacts directory was created
-	artifactsDir := filepath.Join(repoDir, "artifacts", "test-skill", "1.0.0")
-	if _, err := os.Stat(artifactsDir); os.IsNotExist(err) {
-		t.Fatalf("Artifacts directory was not created: %s", artifactsDir)
+	// Verify assets directory was created
+	assetsDir := filepath.Join(repoDir, "assets", "test-skill", "1.0.0")
+	if _, err := os.Stat(assetsDir); os.IsNotExist(err) {
+		t.Fatalf("Assets directory was not created: %s", assetsDir)
 	}
 
 	// Verify sx.lock was created in repo
@@ -264,7 +264,7 @@ func TestCursorMCPIntegration(t *testing.T) {
 	}()
 
 	// Create a test MCP with metadata
-	mcpMetadata := `[artifact]
+	mcpMetadata := `[asset]
 name = "test-mcp"
 version = "1.0.0"
 type = "mcp"
@@ -392,7 +392,7 @@ func TestCursorHookIntegration(t *testing.T) {
 	}()
 
 	// Create a test hook with metadata
-	hookMetadata := `[artifact]
+	hookMetadata := `[asset]
 name = "test-hook"
 version = "1.0.0"
 type = "hook"
@@ -495,7 +495,7 @@ exit 0
 	found := false
 	for _, hookEntry := range hooksList {
 		if hookMap, ok := hookEntry.(map[string]interface{}); ok {
-			if artifact, ok := hookMap["_artifact"].(string); ok && artifact == "test-hook" {
+			if asset, ok := hookMap["_artifact"].(string); ok && asset == "test-hook" {
 				found = true
 				// Verify command path
 				if command, ok := hookMap["command"].(string); ok {
@@ -551,7 +551,7 @@ func TestCursorAutoInstallDeduplication(t *testing.T) {
 	}()
 
 	// Create a test skill with metadata
-	skillMetadata := `[artifact]
+	skillMetadata := `[asset]
 name = "test-skill"
 type = "skill"
 description = "A test skill"

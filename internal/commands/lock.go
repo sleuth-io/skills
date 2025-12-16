@@ -92,13 +92,13 @@ func runLock(cmd *cobra.Command, args []string, requirementsFile, outputFile str
 		return fmt.Errorf("failed to resolve requirements: %w", err)
 	}
 
-	out.printf("Resolved %d assets (including dependencies)\n", len(lockFile.Artifacts))
+	out.printf("Resolved %d assets (including dependencies)\n", len(lockFile.Assets))
 	out.println()
 
-	// Display resolved artifacts
+	// Display resolved assets
 	out.println("Resolved assets:")
-	for _, artifact := range lockFile.Artifacts {
-		out.printf("  - %s@%s (%s) [%s]\n", artifact.Name, artifact.Version, artifact.Type, artifact.GetSourceType())
+	for _, asset := range lockFile.Assets {
+		out.printf("  - %s@%s (%s) [%s]\n", asset.Name, asset.Version, asset.Type, asset.GetSourceType())
 	}
 	out.println()
 

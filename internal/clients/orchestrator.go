@@ -15,18 +15,18 @@ func NewOrchestrator(registry *Registry) *Orchestrator {
 	return &Orchestrator{registry: registry}
 }
 
-// InstallToAll installs artifacts to all detected clients concurrently
+// InstallToAll installs assets to all detected clients concurrently
 func (o *Orchestrator) InstallToAll(ctx context.Context,
-	artifacts []*ArtifactBundle,
+	assets []*AssetBundle,
 	scope *InstallScope,
 	options InstallOptions) map[string]InstallResponse {
 	clients := o.registry.DetectInstalled()
-	return o.InstallToClients(ctx, artifacts, scope, options, clients)
+	return o.InstallToClients(ctx, assets, scope, options, clients)
 }
 
-// InstallToClients installs artifacts to specific clients concurrently
+// InstallToClients installs assets to specific clients concurrently
 func (o *Orchestrator) InstallToClients(ctx context.Context,
-	artifacts []*ArtifactBundle,
+	assets []*AssetBundle,
 	scope *InstallScope,
 	options InstallOptions,
 	targetClients []Client) map[string]InstallResponse {
@@ -41,16 +41,16 @@ func (o *Orchestrator) InstallToClients(ctx context.Context,
 		go func(client Client) {
 			defer wg.Done()
 
-			// Filter artifacts by client compatibility and scope support
-			compatibleArtifacts := o.filterArtifacts(artifacts, client, scope)
+			// Filter assets by client compatibility and scope support
+			compatibleAssets := o.filterAssets(assets, client, scope)
 
-			if len(compatibleArtifacts) == 0 {
+			if len(compatibleAssets) == 0 {
 				resultsMu.Lock()
 				results[client.ID()] = InstallResponse{
-					Results: []ArtifactResult{
+					Results: []AssetResult{
 						{
 							Status:  StatusSkipped,
-							Message: "No compatible artifacts",
+							Message: "No compatible assets",
 						},
 					},
 				}
@@ -60,12 +60,12 @@ func (o *Orchestrator) InstallToClients(ctx context.Context,
 
 			// Let the client handle installation however it wants
 			req := InstallRequest{
-				Artifacts: compatibleArtifacts,
-				Scope:     scope,
-				Options:   options,
+				Assets:  compatibleAssets,
+				Scope:   scope,
+				Options: options,
 			}
 
-			resp, err := client.InstallArtifacts(ctx, req)
+			resp, err := client.InstallAssets(ctx, req)
 			if err != nil {
 				// Client returned error - ensure all results marked as failed
 				for i := range resp.Results {
@@ -88,21 +88,21 @@ func (o *Orchestrator) InstallToClients(ctx context.Context,
 	return results
 }
 
-// filterArtifacts returns artifacts compatible with client and scope
-func (o *Orchestrator) filterArtifacts(artifacts []*ArtifactBundle,
+// filterAssets returns assets compatible with client and scope
+func (o *Orchestrator) filterAssets(assets []*AssetBundle,
 	client Client,
-	scope *InstallScope) []*ArtifactBundle {
-	compatible := make([]*ArtifactBundle, 0)
+	scope *InstallScope) []*AssetBundle {
+	compatible := make([]*AssetBundle, 0)
 
-	for _, bundle := range artifacts {
-		// Check if client supports this artifact type
-		if !client.SupportsArtifactType(bundle.Artifact.Type) {
+	for _, bundle := range assets {
+		// Check if client supports this asset type
+		if !client.SupportsAssetType(bundle.Asset.Type) {
 			continue
 		}
 
-		// If artifact is scoped to repo/path and this is a global scope,
+		// If asset is scoped to repo/path and this is a global scope,
 		// skip it (client doesn't support repo scope)
-		if !bundle.Artifact.IsGlobal() && scope.Type == ScopeGlobal {
+		if !bundle.Asset.IsGlobal() && scope.Type == ScopeGlobal {
 			continue
 		}
 

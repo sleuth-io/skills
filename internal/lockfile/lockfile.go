@@ -9,32 +9,34 @@ import (
 
 // LockFile represents the complete lock file structure
 type LockFile struct {
-	LockVersion string     `toml:"lock-version"`
-	Version     string     `toml:"version"`
-	CreatedBy   string     `toml:"created-by"`
-	Artifacts   []Artifact `toml:"artifacts"`
+	LockVersion string  `toml:"lock-version"`
+	Version     string  `toml:"version"`
+	CreatedBy   string  `toml:"created-by"`
+	Assets      []Asset `toml:"assets"`
 }
 
-// Artifact represents an artifact with its metadata, source, and installation configurations
-type Artifact struct {
-	Name         string        `toml:"name"`
-	Version      string        `toml:"version"`
-	Type         asset.Type `toml:"type"`
-	Clients      []string      `toml:"clients,omitempty"`
-	Dependencies []Dependency  `toml:"dependencies,omitempty"`
+// Asset represents an asset with its metadata, source, and installation configurations
+// (formerly Artifact)
+type Asset struct {
+	Name         string       `toml:"name"`
+	Version      string       `toml:"version"`
+	Type         asset.Type   `toml:"type"`
+	Clients      []string     `toml:"clients,omitempty"`
+	Dependencies []Dependency `toml:"dependencies,omitempty"`
 
 	// Source (one of these will be present)
 	SourceHTTP *SourceHTTP `toml:"source-http,omitempty"`
 	SourcePath *SourcePath `toml:"source-path,omitempty"`
 	SourceGit  *SourceGit  `toml:"source-git,omitempty"`
 
-	// Installation configurations - array of repository installations
-	// If empty, artifact is installed globally
-	Repositories []Repository `toml:"repositories,omitempty"`
+	// Installation configurations - array of scope installations
+	// If empty, asset is installed globally
+	Scopes []Scope `toml:"scopes,omitempty"`
 }
 
-// Repository represents where an artifact is installed within a repository
-type Repository struct {
+// Scope represents where an asset is installed within a repository
+// (formerly Repository)
+type Scope struct {
 	Repo  string   `toml:"repo"`            // Repository URL
 	Paths []string `toml:"paths,omitempty"` // Specific paths within repo (if empty, entire repo)
 }
@@ -48,23 +50,23 @@ const (
 	ScopePath   ScopeType = "path"
 )
 
-// GetScope returns the scope type for this repository entry
+// GetScopeType returns the scope type for this scope entry
 // - If paths is empty/nil, it's repo-scoped (entire repository)
 // - If paths has entries, it's path-scoped (specific paths within repository)
-func (r *Repository) GetScope() ScopeType {
-	if len(r.Paths) > 0 {
+func (s *Scope) GetScopeType() ScopeType {
+	if len(s.Paths) > 0 {
 		return ScopePath
 	}
 	return ScopeRepo
 }
 
-// IsGlobal returns true if artifact is installed globally (no repository restrictions)
-func (a *Artifact) IsGlobal() bool {
-	return len(a.Repositories) == 0
+// IsGlobal returns true if asset is installed globally (no scope restrictions)
+func (a *Asset) IsGlobal() bool {
+	return len(a.Scopes) == 0
 }
 
-// MatchesClient returns true if the artifact is compatible with the given client
-func (a *Artifact) MatchesClient(clientName string) bool {
+// MatchesClient returns true if the asset is compatible with the given client
+func (a *Asset) MatchesClient(clientName string) bool {
 	// If no clients specified, matches all clients
 	if len(a.Clients) == 0 {
 		return true
@@ -80,7 +82,7 @@ func (a *Artifact) MatchesClient(clientName string) bool {
 	return false
 }
 
-// SourceHTTP represents an HTTP source for an artifact
+// SourceHTTP represents an HTTP source for an asset
 type SourceHTTP struct {
 	URL        string            `toml:"url"`
 	Hashes     map[string]string `toml:"hashes"`
@@ -88,12 +90,12 @@ type SourceHTTP struct {
 	UploadedAt *time.Time        `toml:"uploaded-at,omitempty"`
 }
 
-// SourcePath represents a local path source for an artifact
+// SourcePath represents a local path source for an asset
 type SourcePath struct {
 	Path string `toml:"path"`
 }
 
-// SourceGit represents a Git repository source for an artifact
+// SourceGit represents a Git repository source for an asset
 type SourceGit struct {
 	URL          string `toml:"url"`
 	Ref          string `toml:"ref"`
@@ -106,8 +108,8 @@ type Dependency struct {
 	Version string `toml:"version,omitempty"`
 }
 
-// GetSourceType returns the type of source for this artifact
-func (a *Artifact) GetSourceType() string {
+// GetSourceType returns the type of source for this asset
+func (a *Asset) GetSourceType() string {
 	if a.SourceHTTP != nil {
 		return "http"
 	}
@@ -121,7 +123,7 @@ func (a *Artifact) GetSourceType() string {
 }
 
 // GetSourceConfig returns the source configuration as a map for generic handling
-func (a *Artifact) GetSourceConfig() map[string]interface{} {
+func (a *Asset) GetSourceConfig() map[string]interface{} {
 	config := make(map[string]interface{})
 
 	if a.SourceHTTP != nil {
@@ -149,42 +151,43 @@ func (a *Artifact) GetSourceConfig() map[string]interface{} {
 	return config
 }
 
-// String returns a string representation of the artifact
-func (a *Artifact) String() string {
+// String returns a string representation of the asset
+func (a *Asset) String() string {
 	return fmt.Sprintf("%s@%s (%s)", a.Name, a.Version, a.Type)
 }
 
-// Key returns a unique key for the artifact (name@version)
-func (a *Artifact) Key() string {
+// Key returns a unique key for the asset (name@version)
+func (a *Asset) Key() string {
 	return fmt.Sprintf("%s@%s", a.Name, a.Version)
 }
 
-// ScopedArtifact represents an artifact with its scope information
-type ScopedArtifact struct {
-	Artifact *Artifact
-	Scope    string // "Global", repo URL, or "repo:path"
+// ScopedAsset represents an asset with its scope information
+// (formerly ScopedArtifact)
+type ScopedAsset struct {
+	Asset     *Asset
+	ScopeDesc string // "Global", repo URL, or "repo:path"
 }
 
-// GroupByScope returns all artifacts grouped by their scope
-// An artifact can appear in multiple scopes
-func (lf *LockFile) GroupByScope() map[string][]*Artifact {
-	result := make(map[string][]*Artifact)
+// GroupByScope returns all assets grouped by their scope
+// An asset can appear in multiple scopes
+func (lf *LockFile) GroupByScope() map[string][]*Asset {
+	result := make(map[string][]*Asset)
 
-	for i := range lf.Artifacts {
-		art := &lf.Artifacts[i]
+	for i := range lf.Assets {
+		ast := &lf.Assets[i]
 
-		if art.IsGlobal() {
-			result["Global"] = append(result["Global"], art)
+		if ast.IsGlobal() {
+			result["Global"] = append(result["Global"], ast)
 		} else {
-			for _, repo := range art.Repositories {
-				if len(repo.Paths) == 0 {
+			for _, scope := range ast.Scopes {
+				if len(scope.Paths) == 0 {
 					// Repo-scoped
-					result[repo.Repo] = append(result[repo.Repo], art)
+					result[scope.Repo] = append(result[scope.Repo], ast)
 				} else {
 					// Path-scoped
-					for _, path := range repo.Paths {
-						scopeKey := fmt.Sprintf("%s:%s", repo.Repo, path)
-						result[scopeKey] = append(result[scopeKey], art)
+					for _, path := range scope.Paths {
+						scopeKey := fmt.Sprintf("%s:%s", scope.Repo, path)
+						result[scopeKey] = append(result[scopeKey], ast)
 					}
 				}
 			}

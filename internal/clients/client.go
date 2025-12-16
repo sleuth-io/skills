@@ -8,7 +8,7 @@ import (
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
-// Client represents an AI coding client that can have artifacts installed
+// Client represents an AI coding client that can have assets installed
 type Client interface {
 	// Identity
 	ID() string          // Machine name: "claude-code", "cursor", "cline"
@@ -18,27 +18,27 @@ type Client interface {
 	IsInstalled() bool  // Check if this client is installed/configured
 	GetVersion() string // Get client version (empty if not available)
 
-	// Capabilities - what artifact types this client supports
-	SupportsArtifactType(artifactType asset.Type) bool
+	// Capabilities - what asset types this client supports
+	SupportsAssetType(assetType asset.Type) bool
 
 	// Installation - client has FULL control over installation mechanism
-	// Receives all artifacts to install at once (batch)
-	InstallArtifacts(ctx context.Context, req InstallRequest) (InstallResponse, error)
+	// Receives all assets to install at once (batch)
+	InstallAssets(ctx context.Context, req InstallRequest) (InstallResponse, error)
 
-	// Uninstallation - remove artifacts
-	UninstallArtifacts(ctx context.Context, req UninstallRequest) (UninstallResponse, error)
+	// Uninstallation - remove assets
+	UninstallAssets(ctx context.Context, req UninstallRequest) (UninstallResponse, error)
 
-	// Skill operations - for MCP server support
-	// ListSkills returns all installed skills for a given scope
-	ListSkills(ctx context.Context, scope *InstallScope) ([]InstalledSkill, error)
+	// Asset operations - for MCP server support
+	// ListAssets returns all installed assets for a given scope
+	ListAssets(ctx context.Context, scope *InstallScope) ([]InstalledSkill, error)
 	// ReadSkill reads the content of a specific skill by name
 	ReadSkill(ctx context.Context, name string, scope *InstallScope) (*SkillContent, error)
 
-	// EnsureSkillsSupport ensures skills infrastructure is set up for the current context.
+	// EnsureAssetSupport ensures asset infrastructure is set up for the current context.
 	// This is called after installation to ensure rules files, MCP servers, etc. are configured.
 	// For Cursor, this creates local .cursor/rules/skills.md with skills from all applicable scopes.
 	// Clients that don't need post-install setup can return nil.
-	EnsureSkillsSupport(ctx context.Context, scope *InstallScope) error
+	EnsureAssetSupport(ctx context.Context, scope *InstallScope) error
 
 	// InstallHooks installs client-specific hooks (e.g., auto-update, usage tracking).
 	// This is called during installation to set up hooks in the client's configuration.
@@ -57,10 +57,10 @@ type Client interface {
 	// tracking conversation IDs to only run install once per conversation.
 	ShouldInstall(ctx context.Context) (bool, error)
 
-	// VerifyArtifacts checks if artifacts are actually installed (not just tracked).
+	// VerifyAssets checks if assets are actually installed (not just tracked).
 	// Used by --repair mode to detect discrepancies between tracker and filesystem.
 	// Each client implements verification according to its own installation structure.
-	VerifyArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, scope *InstallScope) []VerifyResult
+	VerifyAssets(ctx context.Context, assets []*lockfile.Asset, scope *InstallScope) []VerifyResult
 }
 
 // InstalledSkill represents a skill that has been installed
@@ -81,19 +81,19 @@ type SkillContent struct {
 
 // InstallRequest contains everything needed for installation
 type InstallRequest struct {
-	Artifacts []*ArtifactBundle // All artifacts to install (batch)
-	Scope     *InstallScope     // Where to install (global/repo/path)
-	Options   InstallOptions    // Additional options
+	Assets  []*AssetBundle // All assets to install (batch)
+	Scope   *InstallScope  // Where to install (global/repo/path)
+	Options InstallOptions // Additional options
 }
 
-// ArtifactBundle contains artifact + metadata + zip data
-type ArtifactBundle struct {
-	Artifact *lockfile.Artifact
+// AssetBundle contains asset + metadata + zip data
+type AssetBundle struct {
+	Asset    *lockfile.Asset
 	Metadata *metadata.Metadata
 	ZipData  []byte
 }
 
-// InstallScope defines where artifacts should be installed
+// InstallScope defines where assets should be installed
 type InstallScope struct {
 	Type     ScopeType // Global, Repository, Path
 	RepoRoot string    // Repository root (if applicable)
@@ -116,16 +116,16 @@ type InstallOptions struct {
 	Verbose bool // Verbose output
 }
 
-// InstallResponse contains results per artifact
+// InstallResponse contains results per asset
 type InstallResponse struct {
-	Results []ArtifactResult
+	Results []AssetResult
 }
 
-// UninstallRequest contains artifacts to uninstall
+// UninstallRequest contains assets to uninstall
 type UninstallRequest struct {
-	Artifacts []asset.Asset
-	Scope     *InstallScope
-	Options   UninstallOptions
+	Assets  []asset.Asset
+	Scope   *InstallScope
+	Options UninstallOptions
 }
 
 type UninstallOptions struct {
@@ -134,17 +134,17 @@ type UninstallOptions struct {
 	Verbose bool // Verbose output
 }
 
-// UninstallResponse contains results per artifact
+// UninstallResponse contains results per asset
 type UninstallResponse struct {
-	Results []ArtifactResult
+	Results []AssetResult
 }
 
-// ArtifactResult represents the result of installing/uninstalling one artifact
-type ArtifactResult struct {
-	ArtifactName string
-	Status       ResultStatus
-	Message      string
-	Error        error
+// AssetResult represents the result of installing/uninstalling one asset
+type AssetResult struct {
+	AssetName string
+	Status    ResultStatus
+	Message   string
+	Error     error
 }
 
 type ResultStatus string
@@ -155,11 +155,11 @@ const (
 	StatusSkipped ResultStatus = "skipped"
 )
 
-// VerifyResult represents the result of verifying a single artifact's installation
+// VerifyResult represents the result of verifying a single asset's installation
 type VerifyResult struct {
-	Artifact  *lockfile.Artifact // The artifact that was verified
-	Installed bool               // Whether the artifact is actually installed correctly
-	Message   string             // Details about what was found or missing
+	Asset     *lockfile.Asset // The asset that was verified
+	Installed bool            // Whether the asset is actually installed correctly
+	Message   string          // Details about what was found or missing
 }
 
 // BaseClient provides default implementations for common functionality
@@ -172,8 +172,8 @@ type BaseClient struct {
 func (b *BaseClient) ID() string          { return b.id }
 func (b *BaseClient) DisplayName() string { return b.displayName }
 
-func (b *BaseClient) SupportsArtifactType(artifactType asset.Type) bool {
-	return b.capabilities[artifactType.Key]
+func (b *BaseClient) SupportsAssetType(assetType asset.Type) bool {
+	return b.capabilities[assetType.Key]
 }
 
 // NewBaseClient creates a new base client with capabilities

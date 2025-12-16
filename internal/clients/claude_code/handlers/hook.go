@@ -15,7 +15,7 @@ import (
 
 var hookOps = dirasset.NewOperations("hooks", &asset.TypeHook)
 
-// HookHandler handles hook artifact installation
+// HookHandler handles hook asset installation
 type HookHandler struct {
 	metadata *metadata.Metadata
 }
@@ -27,7 +27,7 @@ func NewHookHandler(meta *metadata.Metadata) *HookHandler {
 	}
 }
 
-// DetectType returns true if files indicate this is a hook artifact
+// DetectType returns true if files indicate this is a hook asset
 func (h *HookHandler) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "hook.sh" || file == "hook.py" || file == "hook.js" {
@@ -37,7 +37,7 @@ func (h *HookHandler) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *HookHandler) GetType() string {
 	return "hook"
 }
@@ -46,7 +46,7 @@ func (h *HookHandler) GetType() string {
 func (h *HookHandler) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeHook,
@@ -91,7 +91,7 @@ func (h *HookHandler) DetectUsageFromToolCall(toolName string, toolInput map[str
 	return "", false
 }
 
-// Install extracts and installs the hook artifact
+// Install extracts and installs the hook asset
 func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
 	// Validate zip structure
 	if err := h.Validate(zipData); err != nil {
@@ -99,7 +99,7 @@ func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase st
 	}
 
 	// Extract to hooks directory
-	if err := hookOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name); err != nil {
+	if err := hookOps.Install(ctx, zipData, targetBase, h.metadata.Asset.Name); err != nil {
 		return err
 	}
 
@@ -111,7 +111,7 @@ func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase st
 	return nil
 }
 
-// Remove uninstalls the hook artifact
+// Remove uninstalls the hook asset
 func (h *HookHandler) Remove(ctx context.Context, targetBase string) error {
 	// Remove from settings.json first
 	if err := h.removeFromSettings(targetBase); err != nil {
@@ -119,15 +119,15 @@ func (h *HookHandler) Remove(ctx context.Context, targetBase string) error {
 	}
 
 	// Remove installation directory
-	return hookOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
+	return hookOps.Remove(ctx, targetBase, h.metadata.Asset.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
 func (h *HookHandler) GetInstallPath() string {
-	return filepath.Join("hooks", h.metadata.Artifact.Name)
+	return filepath.Join("hooks", h.metadata.Asset.Name)
 }
 
-// Validate checks if the zip structure is valid for a hook artifact
+// Validate checks if the zip structure is valid for a hook asset
 func (h *HookHandler) Validate(zipData []byte) error {
 	// List files in zip
 	files, err := utils.ListZipFiles(zipData)
@@ -156,9 +156,9 @@ func (h *HookHandler) Validate(zipData []byte) error {
 		return fmt.Errorf("metadata validation failed: %w", err)
 	}
 
-	// Verify artifact type matches
-	if meta.Artifact.Type != asset.TypeHook {
-		return fmt.Errorf("artifact type mismatch: expected hook, got %s", meta.Artifact.Type)
+	// Verify asset type matches
+	if meta.Asset.Type != asset.TypeHook {
+		return fmt.Errorf("asset type mismatch: expected hook, got %s", meta.Asset.Type)
 	}
 
 	// Check that script file exists
@@ -209,15 +209,15 @@ func (h *HookHandler) updateSettings(targetBase string) error {
 	// Get existing hooks for this event
 	eventHooks := hooks[hookEvent].([]interface{})
 
-	// Remove any existing entry for this artifact (by checking _artifact field)
+	// Remove any existing entry for this asset (by checking _artifact field)
 	var filtered []interface{}
 	for _, hook := range eventHooks {
 		hookMap, ok := hook.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		artifactID, ok := hookMap["_artifact"].(string)
-		if !ok || artifactID != h.metadata.Artifact.Name {
+		assetID, ok := hookMap["_artifact"].(string)
+		if !ok || assetID != h.metadata.Asset.Name {
 			filtered = append(filtered, hook)
 		}
 	}
@@ -272,15 +272,15 @@ func (h *HookHandler) removeFromSettings(targetBase string) error {
 
 	eventHooks := hooks[hookEvent].([]interface{})
 
-	// Filter out this artifact's hook
+	// Filter out this asset's hook
 	var filtered []interface{}
 	for _, hook := range eventHooks {
 		hookMap, ok := hook.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		artifactID, ok := hookMap["_artifact"].(string)
-		if !ok || artifactID != h.metadata.Artifact.Name {
+		assetID, ok := hookMap["_artifact"].(string)
+		if !ok || assetID != h.metadata.Asset.Name {
 			filtered = append(filtered, hook)
 		}
 	}
@@ -307,7 +307,7 @@ func (h *HookHandler) buildHookConfig() map[string]interface{} {
 
 	config := map[string]interface{}{
 		"script":    scriptPath,
-		"_artifact": h.metadata.Artifact.Name,
+		"_artifact": h.metadata.Asset.Name,
 	}
 
 	// Add optional fields
@@ -331,5 +331,5 @@ func (h *HookHandler) CanDetectInstalledState() bool {
 
 // VerifyInstalled checks if the hook is properly installed
 func (h *HookHandler) VerifyInstalled(targetBase string) (bool, string) {
-	return hookOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+	return hookOps.VerifyInstalled(targetBase, h.metadata.Asset.Name, h.metadata.Asset.Version)
 }

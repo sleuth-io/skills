@@ -13,7 +13,7 @@ import (
 
 var skillOps = dirasset.NewOperations("skills", &asset.TypeSkill)
 
-// SkillHandler handles skill artifact installation
+// SkillHandler handles skill asset installation
 type SkillHandler struct {
 	metadata *metadata.Metadata
 }
@@ -25,7 +25,7 @@ func NewSkillHandler(meta *metadata.Metadata) *SkillHandler {
 	}
 }
 
-// DetectType returns true if files indicate this is a skill artifact
+// DetectType returns true if files indicate this is a skill asset
 func (h *SkillHandler) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "SKILL.md" || file == "skill.md" {
@@ -35,7 +35,7 @@ func (h *SkillHandler) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *SkillHandler) GetType() string {
 	return "skill"
 }
@@ -44,7 +44,7 @@ func (h *SkillHandler) GetType() string {
 func (h *SkillHandler) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeSkill,
@@ -88,27 +88,27 @@ func (h *SkillHandler) DetectUsageFromToolCall(toolName string, toolInput map[st
 	return skillName, ok
 }
 
-// Install extracts and installs the skill artifact
+// Install extracts and installs the skill asset
 func (h *SkillHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
 	// Validate zip structure
 	if err := h.Validate(zipData); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	return skillOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name)
+	return skillOps.Install(ctx, zipData, targetBase, h.metadata.Asset.Name)
 }
 
-// Remove uninstalls the skill artifact
+// Remove uninstalls the skill asset
 func (h *SkillHandler) Remove(ctx context.Context, targetBase string) error {
-	return skillOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
+	return skillOps.Remove(ctx, targetBase, h.metadata.Asset.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
 func (h *SkillHandler) GetInstallPath() string {
-	return filepath.Join("skills", h.metadata.Artifact.Name)
+	return filepath.Join("skills", h.metadata.Asset.Name)
 }
 
-// Validate checks if the zip structure is valid for a skill artifact
+// Validate checks if the zip structure is valid for a skill asset
 func (h *SkillHandler) Validate(zipData []byte) error {
 	// List files in zip
 	files, err := utils.ListZipFiles(zipData)
@@ -137,9 +137,9 @@ func (h *SkillHandler) Validate(zipData []byte) error {
 		return fmt.Errorf("metadata validation failed: %w", err)
 	}
 
-	// Verify artifact type matches
-	if meta.Artifact.Type != asset.TypeSkill {
-		return fmt.Errorf("artifact type mismatch: expected skill, got %s", meta.Artifact.Type)
+	// Verify asset type matches
+	if meta.Asset.Type != asset.TypeSkill {
+		return fmt.Errorf("asset type mismatch: expected skill, got %s", meta.Asset.Type)
 	}
 
 	// Check that prompt file exists
@@ -161,7 +161,7 @@ func (h *SkillHandler) CanDetectInstalledState() bool {
 
 // VerifyInstalled checks if the skill is properly installed
 func (h *SkillHandler) VerifyInstalled(targetBase string) (bool, string) {
-	return skillOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+	return skillOps.VerifyInstalled(targetBase, h.metadata.Asset.Name, h.metadata.Asset.Version)
 }
 
 // containsFile checks if a file exists in the file list

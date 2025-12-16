@@ -5,16 +5,16 @@ import (
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
-// SkillDetector detects skill artifacts
+// SkillDetector detects skill assets
 type SkillDetector struct{}
 
 // Compile-time interface checks
 var (
-	_ ArtifactTypeDetector = (*SkillDetector)(nil)
-	_ UsageDetector        = (*SkillDetector)(nil)
+	_ AssetTypeDetector = (*SkillDetector)(nil)
+	_ UsageDetector     = (*SkillDetector)(nil)
 )
 
-// DetectType returns true if files indicate this is a skill artifact
+// DetectType returns true if files indicate this is a skill asset
 func (h *SkillDetector) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "SKILL.md" || file == "skill.md" {
@@ -24,7 +24,7 @@ func (h *SkillDetector) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *SkillDetector) GetType() string {
 	return "skill"
 }
@@ -33,7 +33,7 @@ func (h *SkillDetector) GetType() string {
 func (h *SkillDetector) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeSkill,

@@ -40,7 +40,7 @@ func (h *CommandHandler) Install(ctx context.Context, zipData []byte, targetBase
 	}
 
 	// Write to .cursor/commands/{name}.md
-	destPath := filepath.Join(commandsDir, h.metadata.Artifact.Name+".md")
+	destPath := filepath.Join(commandsDir, h.metadata.Asset.Name+".md")
 	if err := os.WriteFile(destPath, promptContent, 0644); err != nil {
 		return fmt.Errorf("failed to write command file: %w", err)
 	}
@@ -50,7 +50,7 @@ func (h *CommandHandler) Install(ctx context.Context, zipData []byte, targetBase
 
 // Remove removes a slash command from Cursor
 func (h *CommandHandler) Remove(ctx context.Context, targetBase string) error {
-	commandFile := filepath.Join(targetBase, "commands", h.metadata.Artifact.Name+".md")
+	commandFile := filepath.Join(targetBase, "commands", h.metadata.Asset.Name+".md")
 	if err := os.Remove(commandFile); err != nil {
 		if os.IsNotExist(err) {
 			return nil // Already removed
@@ -73,7 +73,7 @@ func (h *CommandHandler) getPromptFile() string {
 
 // VerifyInstalled checks if the command is properly installed
 func (h *CommandHandler) VerifyInstalled(targetBase string) (bool, string) {
-	commandFile := filepath.Join(targetBase, "commands", h.metadata.Artifact.Name+".md")
+	commandFile := filepath.Join(targetBase, "commands", h.metadata.Asset.Name+".md")
 	if !utils.FileExists(commandFile) {
 		return false, "command file not found"
 	}

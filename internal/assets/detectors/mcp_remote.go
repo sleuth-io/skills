@@ -4,8 +4,8 @@ import (
 	"strings"
 )
 
-// MCPRemoteHandler handles MCP remote artifact installation
-// MCP remote artifacts contain only configuration, no server code
+// MCPRemoteDetector detects MCP remote assets
+// MCP remote assets contain only configuration, no server code
 type MCPRemoteDetector struct{}
 
 // Compile-time interface check

@@ -14,7 +14,7 @@ import (
 
 var skillOps = dirasset.NewOperations("skills", &asset.TypeSkill)
 
-// SkillHandler handles skill artifact installation for Cursor
+// SkillHandler handles skill asset installation for Cursor
 // Skills are extracted to .cursor/skills/{name}/ (not transformed to commands)
 type SkillHandler struct {
 	metadata *metadata.Metadata
@@ -27,7 +27,7 @@ func NewSkillHandler(meta *metadata.Metadata) *SkillHandler {
 
 // Install extracts a skill to .cursor/skills/{name}/
 func (h *SkillHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
-	skillsDir := filepath.Join(targetBase, "skills", h.metadata.Artifact.Name)
+	skillsDir := filepath.Join(targetBase, "skills", h.metadata.Asset.Name)
 
 	// Remove existing installation if present
 	if utils.IsDirectory(skillsDir) {
@@ -51,7 +51,7 @@ func (h *SkillHandler) Install(ctx context.Context, zipData []byte, targetBase s
 
 // Remove removes a skill from .cursor/skills/
 func (h *SkillHandler) Remove(ctx context.Context, targetBase string) error {
-	skillsDir := filepath.Join(targetBase, "skills", h.metadata.Artifact.Name)
+	skillsDir := filepath.Join(targetBase, "skills", h.metadata.Asset.Name)
 
 	if !utils.IsDirectory(skillsDir) {
 		// Already removed or never installed
@@ -67,5 +67,5 @@ func (h *SkillHandler) Remove(ctx context.Context, targetBase string) error {
 
 // VerifyInstalled checks if the skill is properly installed
 func (h *SkillHandler) VerifyInstalled(targetBase string) (bool, string) {
-	return skillOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+	return skillOps.VerifyInstalled(targetBase, h.metadata.Asset.Name, h.metadata.Asset.Version)
 }

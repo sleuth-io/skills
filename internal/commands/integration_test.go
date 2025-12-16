@@ -56,7 +56,7 @@ func TestPathRepositoryIntegration(t *testing.T) {
 	}()
 
 	// Create a test skill with metadata
-	skillMetadata := `[artifact]
+	skillMetadata := `[asset]
 name = "test-skill"
 type = "skill"
 description = "A test skill"
@@ -93,7 +93,7 @@ prompt-file = "SKILL.md"
 
 	// Create add command with mock prompter
 	mockPrompter := NewMockPrompter().
-		ExpectConfirm("correct", true).       // Confirm artifact name/type
+		ExpectConfirm("correct", true).       // Confirm asset name/type
 		ExpectPrompt("Version", "1.0.0").     // Enter version
 		ExpectPrompt("Choose an option", "1") // Installation scope: make available globally
 
@@ -104,15 +104,15 @@ prompt-file = "SKILL.md"
 		t.Fatalf("Failed to add skill: %v", err)
 	}
 
-	// Verify artifacts directory was created
-	artifactsDir := filepath.Join(repoDir, "artifacts", "test-skill", "1.0.0")
-	if _, err := os.Stat(artifactsDir); os.IsNotExist(err) {
-		t.Fatalf("Artifacts directory was not created: %s", artifactsDir)
+	// Verify assets directory was created
+	assetsDir := filepath.Join(repoDir, "assets", "test-skill", "1.0.0")
+	if _, err := os.Stat(assetsDir); os.IsNotExist(err) {
+		t.Fatalf("Assets directory was not created: %s", assetsDir)
 	}
 
-	// Debug: List files in artifacts directory
-	files, _ := os.ReadDir(artifactsDir)
-	t.Log("Files in artifacts directory:")
+	// Debug: List files in assets directory
+	files, _ := os.ReadDir(assetsDir)
+	t.Log("Files in assets directory:")
 	for _, file := range files {
 		t.Logf("  - %s", file.Name())
 	}

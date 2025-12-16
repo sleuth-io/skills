@@ -8,8 +8,8 @@ import (
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
-// MCPRemoteHandler handles MCP remote artifact installation for Cursor
-// MCP remote artifacts contain only configuration, no server code
+// MCPRemoteHandler handles MCP remote asset installation for Cursor
+// MCP remote assets contain only configuration, no server code
 type MCPRemoteHandler struct {
 	metadata *metadata.Metadata
 }
@@ -36,7 +36,7 @@ func (h *MCPRemoteHandler) Install(ctx context.Context, zipData []byte, targetBa
 	if config.MCPServers == nil {
 		config.MCPServers = make(map[string]interface{})
 	}
-	config.MCPServers[h.metadata.Artifact.Name] = entry
+	config.MCPServers[h.metadata.Asset.Name] = entry
 
 	// Write updated mcp.json
 	if err := WriteMCPConfig(mcpConfigPath, config); err != nil {
@@ -57,7 +57,7 @@ func (h *MCPRemoteHandler) Remove(ctx context.Context, targetBase string) error 
 	}
 
 	// Remove entry
-	delete(config.MCPServers, h.metadata.Artifact.Name)
+	delete(config.MCPServers, h.metadata.Asset.Name)
 
 	// Write updated mcp.json
 	if err := WriteMCPConfig(mcpConfigPath, config); err != nil {
@@ -99,7 +99,7 @@ func (h *MCPRemoteHandler) VerifyInstalled(targetBase string) (bool, string) {
 		return false, "failed to read mcp.json: " + err.Error()
 	}
 
-	if _, exists := config.MCPServers[h.metadata.Artifact.Name]; !exists {
+	if _, exists := config.MCPServers[h.metadata.Asset.Name]; !exists {
 		return false, "MCP remote server not registered"
 	}
 

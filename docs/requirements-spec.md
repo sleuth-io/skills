@@ -1,15 +1,15 @@
-# Sleuth Requirements File Specification
+# SX Requirements File Specification
 
 ## Overview
 
-This specification defines `sleuth.txt`, a simple requirements format for declaring AI client artifacts before resolution into a lock file. Inspired by pip's `requirements.txt`, it prioritizes simplicity and human editability.
+This specification defines `sx.txt`, a simple requirements format for declaring AI client assets before resolution into a lock file. Inspired by pip's `requirements.txt`, it prioritizes simplicity and human editability.
 
 ## File Naming
 
 Requirements files must be named:
 
-- `sleuth.txt` (default)
-- `sleuth-<name>.txt` (named variants)
+- `sx.txt` (default)
+- `sx-<name>.txt` (named variants)
 
 ## Format
 
@@ -41,7 +41,7 @@ https://example.com/artifacts/skill.zip
 
 ## Requirement Types
 
-### Registry Artifacts
+### Vault Assets
 
 Format: `<name>[<version-spec>]`
 
@@ -75,8 +75,8 @@ awesome-skill
 
 **Resolution**:
 
-- Uses default repository configured in `config.toml` (see `repository-spec.md`)
-- Queries repository for available versions
+- Uses default vault configured in `config.toml` (see `vault-spec.md`)
+- Queries vault for available versions
 - Filters versions matching specifier
 - Resolves dependencies recursively
 - Selects highest compatible version
@@ -105,14 +105,14 @@ git+https://github.com/user/monorepo.git@main#name=api-agent&path=packages/agent
 - `git+` prefix (required)
 - URL: Repository URL (HTTPS or SSH)
 - `@<ref>`: Git reference - branch, tag, or commit SHA
-- `#name=<name>`: Artifact name (required)
+- `#name=<name>`: Asset name (required)
 - `&path=<subdir>`: Subdirectory within repo (optional)
 
 **Resolution**:
 
 - Branch/tag: Resolved to commit SHA via `git ls-remote`
 - Commit SHA: Used as-is
-- Client clones repo and extracts artifact from `path` (or root)
+- Client clones repo and extracts asset from `path` (or root)
 
 ### Local Paths
 
@@ -154,7 +154,7 @@ https://cdn.company.com/mcps/custom.zip
 
 When version is not specified in requirement (git, path, HTTP sources), it's determined by:
 
-### From Artifact Metadata
+### From Asset Metadata
 
 Client extracts zip and checks for version in:
 
@@ -181,25 +181,11 @@ type: skill
 
 ### From Source Timestamps
 
-If no metadata found, generate version: `0.0.0+YYYYMMDD`
+If no metadata found, generate version using format `0.0.0+YYYYMMDD` based on:
 
-**Local paths**: Use file system `mtime`
-
-```txt
-./my-skill.zip  →  0.0.0+20250125  (if file modified on 2025-01-25)
-```
-
-**HTTP sources**: Use `Last-Modified` header, fallback to `Date` header, fallback to current date
-
-```txt
-https://example.com/skill.zip  →  0.0.0+20250120  (if Last-Modified: 2025-01-20)
-```
-
-**Git sources**: Use commit timestamp
-
-```txt
-git+https://github.com/user/repo.git@main#name=agent  →  0.0.0+20250118  (if commit date is 2025-01-18)
-```
+- **Local paths**: File system modification time
+- **HTTP sources**: `Last-Modified` header, fallback to `Date` header, fallback to current date
+- **Git sources**: Commit timestamp
 
 ## Comments and Whitespace
 
@@ -217,38 +203,38 @@ github-mcp==1.2.3  # Inline comments not supported
 
 ## Dependencies
 
-Requirements file specifies **top-level** artifacts only. Dependencies are:
+Requirements file specifies **top-level** assets only. Dependencies are:
 
-- Declared in artifact metadata (for registry artifacts)
-- Declared in `package.json` or `metadata.yml` (for git/path/HTTP artifacts)
+- Declared in asset metadata (for vault assets)
+- Declared in `package.json` or `metadata.yml` (for git/path/HTTP assets)
 - Resolved recursively during lock file generation
 
 ## Lock File Generation
 
-Command: `sleuth lock`
+Command: `sx lock`
 
 Process:
 
-1. Parse `sleuth.txt`
+1. Parse `sx.txt`
 2. For each requirement:
-   - Registry artifacts: Query repository (see `repository-spec.md`), select best match
-   - Git: Resolve refs to commit SHAs, extract artifact
+   - Vault assets: Query vault (see `vault-spec.md`), select best match
+   - Git: Resolve refs to commit SHAs, extract asset
    - Path/HTTP: Download, extract version from metadata or timestamp
 3. Resolve dependencies recursively
-4. Detect conflicts (multiple artifacts require incompatible versions)
-5. Generate `sleuth.lock` with:
-   - Exact versions for all artifacts
+4. Detect conflicts (multiple assets require incompatible versions)
+5. Generate `sx.lock` with:
+   - Exact versions for all assets
    - Commit SHAs for git sources
    - Hashes for HTTP sources
    - Full dependency graph
 
-See `lock-spec.md` for lock file format and `repository-spec.md` for repository structure.
+See `lock-spec.md` for lock file format and `vault-spec.md` for vault structure.
 
 ## Examples
 
 ### Simple Project
 
-`sleuth.txt`:
+`sx.txt`:
 
 ```txt
 # Core MCPs
@@ -259,14 +245,14 @@ database-mcp~=2.0.0
 code-reviewer>=3.0.0
 ```
 
-Generates `sleuth.lock` with resolved versions, dependencies, and hashes.
+Generates `sx.lock` with resolved versions, dependencies, and hashes.
 
 ### Mixed Sources
 
-`sleuth.txt`:
+`sx.txt`:
 
 ```txt
-# From registry
+# From vault
 github-mcp==1.2.3
 
 # From git (internal tool)
@@ -281,35 +267,35 @@ https://cdn.example.com/skills/formatter.zip
 
 ### Development Workflow
 
-1. Create `sleuth.txt` with high-level requirements
-2. Run `sleuth lock` to generate `sleuth.lock`
+1. Create `sx.txt` with high-level requirements
+2. Run `sx lock` to generate `sx.lock`
 3. Commit both files to version control
-4. Team members run `sleuth sync` to install from lock file
-5. Update `sleuth.txt` when adding/changing artifacts
-6. Run `sleuth lock` to regenerate lock file
+4. Team members run `sx install` to install from lock file
+5. Update `sx.txt` when adding/changing assets
+6. Run `sx lock` to regenerate lock file
 
 ## Comparison with Lock File
 
-| Aspect           | Requirements (sleuth.txt) | Lock File (sleuth.lock)   |
+| Aspect           | Requirements (sx.txt)     | Lock File (sx.lock)       |
 | ---------------- | ------------------------- | ------------------------- |
-| **Purpose**      | Declare desired artifacts | Pin exact versions        |
+| **Purpose**      | Declare desired assets    | Pin exact versions        |
 | **Format**       | Plain text, line-based    | TOML, structured          |
 | **Versions**     | Ranges (>=, ~=, etc.)     | Exact versions only       |
 | **Git refs**     | Branches, tags, commits   | Commit SHAs only          |
 | **Dependencies** | Top-level only            | Full dependency graph     |
 | **Hashes**       | Not included              | Required for HTTP sources |
 | **Editability**  | Hand-edited by users      | Machine-generated         |
-| **Scope**        | Implicit (file location)  | Explicit per artifact     |
+| **Scope**        | Implicit (file location)  | Explicit per asset        |
 
 ## Edge Cases
 
 ### Conflicting Versions
 
-If multiple artifacts require incompatible versions:
+If multiple assets require incompatible versions:
 
 ```txt
-artifact-a  # depends on helper>=2.0
-artifact-b  # depends on helper<2.0
+asset-a  # depends on helper>=2.0
+asset-b  # depends on helper<2.0
 ```
 
 Resolution fails with clear error message listing conflict.
@@ -325,14 +311,14 @@ Resolution fails: "Git ref 'nonexistent' not found in repository"
 ### Invalid Path
 
 ```txt
-./nonexistent/artifact.zip
+./nonexistent/asset.zip
 ```
 
-Resolution fails: "File not found: ./nonexistent/artifact.zip"
+Resolution fails: "File not found: ./nonexistent/asset.zip"
 
 ### Circular Dependencies
 
-If artifact A depends on B, and B depends on A, resolution fails with circular dependency error.
+If asset A depends on B, and B depends on A, resolution fails with circular dependency error.
 
 ## Future Enhancements
 

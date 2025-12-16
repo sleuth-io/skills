@@ -15,7 +15,7 @@ const (
 	TypePath   = lockfile.ScopePath
 )
 
-// Matcher matches artifacts based on scope
+// Matcher matches assets based on scope
 type Matcher struct {
 	currentScope *Scope
 }
@@ -34,18 +34,18 @@ func NewMatcher(currentScope *Scope) *Matcher {
 	}
 }
 
-// MatchesArtifact checks if an artifact should be installed in the current scope
-// An artifact matches if:
-// - It's global (no repositories) OR
-// - It has a repository entry that matches the current context
-func (m *Matcher) MatchesArtifact(artifact *lockfile.Artifact) bool {
-	// Global artifacts (no repositories) always match
-	if artifact.IsGlobal() {
+// MatchesAsset checks if an asset should be installed in the current scope
+// An asset matches if:
+// - It's global (no scopes) OR
+// - It has a scope entry that matches the current context
+func (m *Matcher) MatchesAsset(asset *lockfile.Asset) bool {
+	// Global assets (no repositories) always match
+	if asset.IsGlobal() {
 		return true
 	}
 
 	// Check each repository entry to see if any match
-	for _, repo := range artifact.Repositories {
+	for _, repo := range asset.Scopes {
 		if m.matchesRepository(&repo) {
 			return true
 		}
@@ -55,8 +55,8 @@ func (m *Matcher) MatchesArtifact(artifact *lockfile.Artifact) bool {
 }
 
 // matchesRepository checks if a repository entry matches the current scope
-func (m *Matcher) matchesRepository(repo *lockfile.Repository) bool {
-	// If we're in global scope, repository-specific artifacts don't match
+func (m *Matcher) matchesRepository(repo *lockfile.Scope) bool {
+	// If we're in global scope, repository-specific assets don't match
 	if m.currentScope.Type == TypeGlobal {
 		return false
 	}
@@ -85,33 +85,33 @@ func (m *Matcher) matchesRepository(repo *lockfile.Repository) bool {
 	return false
 }
 
-// matchesRepoURL checks if the artifact's repo matches the current repo
-func (m *Matcher) matchesRepoURL(artifactRepo string) bool {
-	if m.currentScope.RepoURL == "" || artifactRepo == "" {
+// matchesRepoURL checks if the asset's repo matches the current repo
+func (m *Matcher) matchesRepoURL(assetRepo string) bool {
+	if m.currentScope.RepoURL == "" || assetRepo == "" {
 		return false
 	}
 
 	// Normalize both URLs for comparison
 	currentNormalized := NormalizeRepoURL(m.currentScope.RepoURL)
-	artifactNormalized := NormalizeRepoURL(artifactRepo)
+	assetNormalized := NormalizeRepoURL(assetRepo)
 
-	return currentNormalized == artifactNormalized
+	return currentNormalized == assetNormalized
 }
 
-// matchesPath checks if the artifact's path matches the current path
-func (m *Matcher) matchesPath(artifactPath string) bool {
-	if m.currentScope.RepoPath == "" || artifactPath == "" {
+// matchesPath checks if the asset's path matches the current path
+func (m *Matcher) matchesPath(assetPath string) bool {
+	if m.currentScope.RepoPath == "" || assetPath == "" {
 		return false
 	}
 
 	// Normalize paths
 	currentPath := normalizeRepoPath(m.currentScope.RepoPath)
-	artifactPath = normalizeRepoPath(artifactPath)
+	assetPath = normalizeRepoPath(assetPath)
 
-	// Check if current path is within or equal to artifact path
-	// For example, if artifact is scoped to "services/api"
+	// Check if current path is within or equal to asset path
+	// For example, if asset is scoped to "services/api"
 	// and we're in "services/api/handlers", it should match
-	return strings.HasPrefix(currentPath, artifactPath) || currentPath == artifactPath
+	return strings.HasPrefix(currentPath, assetPath) || currentPath == assetPath
 }
 
 // MatchRepoURLs checks if two repository URLs refer to the same repository
@@ -197,20 +197,20 @@ func normalizeRepoPath(path string) string {
 	return cleaned
 }
 
-// GetInstallLocations returns all installation base directories for an artifact in the current context
-// An artifact can have multiple installation locations if it has multiple repository entries
-func GetInstallLocations(artifact *lockfile.Artifact, currentScope *Scope, repoRoot, globalBase string) []string {
+// GetInstallLocations returns all installation base directories for an asset in the current context
+// An asset can have multiple installation locations if it has multiple repository entries
+func GetInstallLocations(asset *lockfile.Asset, currentScope *Scope, repoRoot, globalBase string) []string {
 	var locations []string
 
-	// If global artifact (no repositories), install to global base
-	if artifact.IsGlobal() {
+	// If global asset (no repositories), install to global base
+	if asset.IsGlobal() {
 		return []string{globalBase}
 	}
 
 	matcher := NewMatcher(currentScope)
 
 	// Check each repository entry
-	for _, repo := range artifact.Repositories {
+	for _, repo := range asset.Scopes {
 		if !matcher.matchesRepository(&repo) {
 			continue
 		}

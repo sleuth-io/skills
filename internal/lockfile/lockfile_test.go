@@ -12,12 +12,12 @@ lock-version = "1.0"
 version = "abc123"
 created-by = "test"
 
-[[artifacts]]
+[[assets]]
 name = "test-skill"
 version = "1.0.0"
 type = "skill"
 
-[artifacts.source-http]
+[assets.source-http]
 url = "https://example.com/test.zip"
 hashes = {sha256 = "abc123"}
 `)
@@ -31,21 +31,21 @@ hashes = {sha256 = "abc123"}
 		t.Errorf("Expected lock-version 1.0, got %s", lockFile.LockVersion)
 	}
 
-	if len(lockFile.Artifacts) != 1 {
-		t.Fatalf("Expected 1 artifact, got %d", len(lockFile.Artifacts))
+	if len(lockFile.Assets) != 1 {
+		t.Fatalf("Expected 1 asset, got %d", len(lockFile.Assets))
 	}
 
-	lockArtifact := &lockFile.Artifacts[0]
-	if lockArtifact.Name != "test-skill" {
-		t.Errorf("Expected name test-skill, got %s", lockArtifact.Name)
+	lockAsset := &lockFile.Assets[0]
+	if lockAsset.Name != "test-skill" {
+		t.Errorf("Expected name test-skill, got %s", lockAsset.Name)
 	}
 
-	if lockArtifact.Version != "1.0.0" {
-		t.Errorf("Expected version 1.0.0, got %s", lockArtifact.Version)
+	if lockAsset.Version != "1.0.0" {
+		t.Errorf("Expected version 1.0.0, got %s", lockAsset.Version)
 	}
 
-	if lockArtifact.Type != asset.TypeSkill {
-		t.Errorf("Expected type skill, got %s", lockArtifact.Type)
+	if lockAsset.Type != asset.TypeSkill {
+		t.Errorf("Expected type skill, got %s", lockAsset.Type)
 	}
 }
 
@@ -61,7 +61,7 @@ func TestValidateLockFile(t *testing.T) {
 				LockVersion: "1.0",
 				Version:     "abc",
 				CreatedBy:   "test",
-				Artifacts: []Artifact{
+				Assets: []Asset{
 					{
 						Name:    "test",
 						Version: "1.0.0",
@@ -89,7 +89,7 @@ func TestValidateLockFile(t *testing.T) {
 				LockVersion: "1.0",
 				Version:     "abc",
 				CreatedBy:   "test",
-				Artifacts: []Artifact{
+				Assets: []Asset{
 					{
 						Name:    "test",
 						Version: "invalid",
@@ -100,12 +100,12 @@ func TestValidateLockFile(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "missing artifact name",
+			name: "missing asset name",
 			lockFile: &LockFile{
 				LockVersion: "1.0",
 				Version:     "abc",
 				CreatedBy:   "test",
-				Artifacts: []Artifact{
+				Assets: []Asset{
 					{
 						Name:    "",
 						Version: "1.0.0",
@@ -132,7 +132,7 @@ func TestCircularDependencies(t *testing.T) {
 		LockVersion: "1.0",
 		Version:     "test",
 		CreatedBy:   "test",
-		Artifacts: []Artifact{
+		Assets: []Asset{
 			{
 				Name:    "a",
 				Version: "1.0.0",
@@ -162,30 +162,30 @@ func TestCircularDependencies(t *testing.T) {
 	}
 }
 
-func TestArtifactScopes(t *testing.T) {
+func TestAssetScopes(t *testing.T) {
 	tests := []struct {
 		name       string
-		artifact   Artifact
+		asset      Asset
 		isGlobal   bool
 		repoScopes []ScopeType // Scope of each repository entry
 	}{
 		{
 			name: "global scope (no repositories)",
-			artifact: Artifact{
-				Name:         "test",
-				Version:      "1.0.0",
-				Type:         asset.TypeSkill,
-				Repositories: []Repository{},
+			asset: Asset{
+				Name:    "test",
+				Version: "1.0.0",
+				Type:    asset.TypeSkill,
+				Scopes:  []Scope{},
 			},
 			isGlobal: true,
 		},
 		{
 			name: "repo scope (repo with no paths)",
-			artifact: Artifact{
+			asset: Asset{
 				Name:    "test",
 				Version: "1.0.0",
 				Type:    asset.TypeSkill,
-				Repositories: []Repository{
+				Scopes: []Scope{
 					{Repo: "https://github.com/user/repo"},
 				},
 			},
@@ -194,11 +194,11 @@ func TestArtifactScopes(t *testing.T) {
 		},
 		{
 			name: "path scope (repo with paths)",
-			artifact: Artifact{
+			asset: Asset{
 				Name:    "test",
 				Version: "1.0.0",
 				Type:    asset.TypeSkill,
-				Repositories: []Repository{
+				Scopes: []Scope{
 					{Repo: "https://github.com/user/repo", Paths: []string{"src/components"}},
 				},
 			},
@@ -207,11 +207,11 @@ func TestArtifactScopes(t *testing.T) {
 		},
 		{
 			name: "mixed scopes (multiple repositories)",
-			artifact: Artifact{
+			asset: Asset{
 				Name:    "test",
 				Version: "1.0.0",
 				Type:    asset.TypeSkill,
-				Repositories: []Repository{
+				Scopes: []Scope{
 					{Repo: "https://github.com/user/repo1"},
 					{Repo: "https://github.com/user/repo2", Paths: []string{"backend"}},
 				},
@@ -223,15 +223,15 @@ func TestArtifactScopes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.artifact.IsGlobal() != tt.isGlobal {
-				t.Errorf("IsGlobal() = %v, want %v", tt.artifact.IsGlobal(), tt.isGlobal)
+			if tt.asset.IsGlobal() != tt.isGlobal {
+				t.Errorf("IsGlobal() = %v, want %v", tt.asset.IsGlobal(), tt.isGlobal)
 			}
 
 			if len(tt.repoScopes) > 0 {
-				for i, repo := range tt.artifact.Repositories {
-					scope := repo.GetScope()
+				for i, repo := range tt.asset.Scopes {
+					scope := repo.GetScopeType()
 					if scope != tt.repoScopes[i] {
-						t.Errorf("Repository[%d].GetScope() = %s, want %s", i, scope, tt.repoScopes[i])
+						t.Errorf("Scope[%d].GetScopeType() = %s, want %s", i, scope, tt.repoScopes[i])
 					}
 				}
 			}

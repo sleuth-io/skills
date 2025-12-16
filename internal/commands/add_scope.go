@@ -12,7 +12,7 @@ import (
 // promptForRepositoriesWithUI prompts user for repository configurations using new UI
 // Takes currentRepos (nil if not installed, empty slice if global, or list of repos)
 // Returns nil, nil if user chooses not to install (which removes it from lock file if present)
-func promptForRepositoriesWithUI(artifactName, version string, currentRepos []lockfile.Repository, styledOut *ui.Output, ioc *components.IOContext) ([]lockfile.Repository, error) {
+func promptForRepositoriesWithUI(assetName, version string, currentRepos []lockfile.Scope, styledOut *ui.Output, ioc *components.IOContext) ([]lockfile.Scope, error) {
 	// Display current state
 	displayCurrentInstallation(currentRepos, styledOut)
 
@@ -65,16 +65,16 @@ func promptForRepositoriesWithUI(artifactName, version string, currentRepos []lo
 
 	switch selected.Value {
 	case "keep": // Keep current settings
-		styledOut.Success(fmt.Sprintf("%s v%s - no changes made", artifactName, version))
+		styledOut.Success(fmt.Sprintf("%s v%s - no changes made", assetName, version))
 		return currentRepos, nil
 
 	case "global": // Make it available globally
 		styledOut.Success("Set to global installation")
-		return []lockfile.Repository{}, nil // Empty array = global
+		return []lockfile.Scope{}, nil // Empty array = global
 
 	case "modify": // Add/modify repository-specific installations
 		if currentRepos == nil {
-			currentRepos = []lockfile.Repository{}
+			currentRepos = []lockfile.Scope{}
 		}
 		return modifyRepositories(currentRepos, styledOut, ioc)
 
@@ -89,13 +89,13 @@ func promptForRepositoriesWithUI(artifactName, version string, currentRepos []lo
 
 // modifyRepositories allows interactive modification of repository list
 // Returns the modified list of repositories
-func modifyRepositories(currentRepos []lockfile.Repository, styledOut *ui.Output, ioc *components.IOContext) ([]lockfile.Repository, error) {
+func modifyRepositories(currentRepos []lockfile.Scope, styledOut *ui.Output, ioc *components.IOContext) ([]lockfile.Scope, error) {
 	// Clone current state (so we can cancel without side effects)
-	workingRepos := make([]lockfile.Repository, len(currentRepos))
+	workingRepos := make([]lockfile.Scope, len(currentRepos))
 	copy(workingRepos, currentRepos)
 
 	// Save original for comparison later
-	originalRepos := make([]lockfile.Repository, len(currentRepos))
+	originalRepos := make([]lockfile.Scope, len(currentRepos))
 	copy(originalRepos, currentRepos)
 
 	for {
@@ -225,16 +225,16 @@ func modifyRepositories(currentRepos []lockfile.Repository, styledOut *ui.Output
 }
 
 // promptForNewRepository prompts for a new repository with URL and paths
-func promptForNewRepository(styledOut *ui.Output, ioc *components.IOContext) (lockfile.Repository, error) {
+func promptForNewRepository(styledOut *ui.Output, ioc *components.IOContext) (lockfile.Scope, error) {
 	// Prompt for repository URL
 	repoURL, err := ioc.Input("Repository URL (e.g., github.com/user/repo or full URL)", "")
 	if err != nil {
-		return lockfile.Repository{}, err
+		return lockfile.Scope{}, err
 	}
 
 	repoURL = strings.TrimSpace(repoURL)
 	if repoURL == "" {
-		return lockfile.Repository{}, fmt.Errorf("repository URL is required")
+		return lockfile.Scope{}, fmt.Errorf("repository URL is required")
 	}
 
 	// If it's just a slug (e.g., "user/repo"), convert to full GitHub URL
@@ -248,7 +248,7 @@ func promptForNewRepository(styledOut *ui.Output, ioc *components.IOContext) (lo
 	// Ask if entire repository or specific paths (default to yes)
 	entireRepo, err := ioc.Confirm("Do you want to install for the entire repository?", true)
 	if err != nil {
-		return lockfile.Repository{}, err
+		return lockfile.Scope{}, err
 	}
 
 	var paths []string
@@ -256,11 +256,11 @@ func promptForNewRepository(styledOut *ui.Output, ioc *components.IOContext) (lo
 		// Collect paths
 		paths, err = promptForRepositoryPaths(styledOut, repoURL, ioc)
 		if err != nil {
-			return lockfile.Repository{}, err
+			return lockfile.Scope{}, err
 		}
 	}
 
-	return lockfile.Repository{
+	return lockfile.Scope{
 		Repo:  repoURL,
 		Paths: paths,
 	}, nil

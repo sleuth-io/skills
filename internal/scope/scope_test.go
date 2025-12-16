@@ -7,76 +7,76 @@ import (
 	"github.com/sleuth-io/skills/internal/lockfile"
 )
 
-func TestMatchesArtifact(t *testing.T) {
+func TestMatchesAsset(t *testing.T) {
 	tests := []struct {
-		name     string
-		scope    *Scope
-		artifact *lockfile.Artifact
-		want     bool
+		name  string
+		scope *Scope
+		asset *lockfile.Asset
+		want  bool
 	}{
 		{
-			name: "global artifact always matches",
+			name: "global asset always matches",
 			scope: &Scope{
 				Type: TypeGlobal,
 			},
-			artifact: &lockfile.Artifact{
-				Name:         "test",
-				Repositories: []lockfile.Repository{}, // Empty = global
+			asset: &lockfile.Asset{
+				Name:   "test",
+				Scopes: []lockfile.Scope{}, // Empty = global
 			},
 			want: true,
 		},
 		{
-			name: "repo artifact matches when in same repo",
+			name: "repo asset matches when in same repo",
 			scope: &Scope{
 				Type:    TypeRepo,
 				RepoURL: "https://github.com/test/repo",
 			},
-			artifact: &lockfile.Artifact{
+			asset: &lockfile.Asset{
 				Name: "test",
-				Repositories: []lockfile.Repository{
+				Scopes: []lockfile.Scope{
 					{Repo: "https://github.com/test/repo"},
 				},
 			},
 			want: true,
 		},
 		{
-			name: "repo artifact doesn't match from global scope",
+			name: "repo asset doesn't match from global scope",
 			scope: &Scope{
 				Type: TypeGlobal,
 			},
-			artifact: &lockfile.Artifact{
+			asset: &lockfile.Asset{
 				Name: "test",
-				Repositories: []lockfile.Repository{
+				Scopes: []lockfile.Scope{
 					{Repo: "https://github.com/test/repo"},
 				},
 			},
 			want: false,
 		},
 		{
-			name: "path artifact matches when in matching path",
+			name: "path asset matches when in matching path",
 			scope: &Scope{
 				Type:     TypePath,
 				RepoURL:  "https://github.com/test/repo",
 				RepoPath: "src/components",
 			},
-			artifact: &lockfile.Artifact{
+			asset: &lockfile.Asset{
 				Name: "test",
-				Repositories: []lockfile.Repository{
+				Scopes: []lockfile.Scope{
 					{Repo: "https://github.com/test/repo", Paths: []string{"src/components"}},
 				},
 			},
 			want: true,
 		},
 		{
-			name: "path artifact doesn't match when in different path",
+			name: "path asset doesn't match when in different path",
 			scope: &Scope{
 				Type:     TypePath,
 				RepoURL:  "https://github.com/test/repo",
 				RepoPath: "src/utils",
 			},
-			artifact: &lockfile.Artifact{
+			asset: &lockfile.Asset{
 				Name: "test",
-				Repositories: []lockfile.Repository{
+				Scopes: []lockfile.Scope{
 					{Repo: "https://github.com/test/repo", Paths: []string{"src/components"}},
 				},
 			},
@@ -87,8 +87,8 @@ func TestMatchesArtifact(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			matcher := NewMatcher(tt.scope)
-			if got := matcher.MatchesArtifact(tt.artifact); got != tt.want {
-				t.Errorf("MatchesArtifact() = %v, want %v", got, tt.want)
+			if got := matcher.MatchesAsset(tt.asset); got != tt.want {
+				t.Errorf("MatchesAsset() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -100,15 +100,15 @@ func TestGetInstallLocations(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		artifact  *lockfile.Artifact
+		asset     *lockfile.Asset
 		scope     *Scope
 		wantPaths []string
 	}{
 		{
-			name: "global artifact",
-			artifact: &lockfile.Artifact{
-				Name:         "test",
-				Repositories: []lockfile.Repository{},
+			name: "global asset",
+			asset: &lockfile.Asset{
+				Name:   "test",
+				Scopes: []lockfile.Scope{},
 			},
 			scope: &Scope{
 				Type: TypeGlobal,
@@ -116,10 +116,10 @@ func TestGetInstallLocations(t *testing.T) {
 			wantPaths: []string{globalBase},
 		},
 		{
-			name: "repo artifact",
-			artifact: &lockfile.Artifact{
+			name: "repo asset",
+			asset: &lockfile.Asset{
 				Name: "test",
-				Repositories: []lockfile.Repository{
+				Scopes: []lockfile.Scope{
 					{Repo: "https://github.com/test/repo"},
 				},
 			},
@@ -130,10 +130,10 @@ func TestGetInstallLocations(t *testing.T) {
 			wantPaths: []string{filepath.Join(repoRoot, ".claude")},
 		},
 		{
-			name: "path artifact",
-			artifact: &lockfile.Artifact{
+			name: "path asset",
+			asset: &lockfile.Asset{
 				Name: "test",
-				Repositories: []lockfile.Repository{
+				Scopes: []lockfile.Scope{
 					{Repo: "https://github.com/test/repo", Paths: []string{"src/components"}},
 				},
 			},
@@ -146,9 +146,9 @@ func TestGetInstallLocations(t *testing.T) {
 		},
 		{
 			name: "multiple paths",
-			artifact: &lockfile.Artifact{
+			asset: &lockfile.Asset{
 				Name: "test",
-				Repositories: []lockfile.Repository{
+				Scopes: []lockfile.Scope{
 					{Repo: "https://github.com/test/repo", Paths: []string{"src/components", "src/utils"}},
 				},
 			},
@@ -163,7 +163,7 @@ func TestGetInstallLocations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetInstallLocations(tt.artifact, tt.scope, repoRoot, globalBase)
+			got := GetInstallLocations(tt.asset, tt.scope, repoRoot, globalBase)
 			if len(got) != len(tt.wantPaths) {
 				t.Errorf("GetInstallLocations() returned %d paths, want %d", len(got), len(tt.wantPaths))
 				return

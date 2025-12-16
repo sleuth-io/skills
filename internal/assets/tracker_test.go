@@ -27,36 +27,36 @@ func TestGetTrackerPath(t *testing.T) {
 func TestTrackerOperations(t *testing.T) {
 	// Create a fresh in-memory tracker for testing (don't load from disk)
 	tracker := &Tracker{
-		Version:   TrackerFormatVersion,
-		Artifacts: []InstalledArtifact{},
+		Version: TrackerFormatVersion,
+		Assets:  []InstalledAsset{},
 	}
 
 	// Verify tracker starts empty
-	if len(tracker.Artifacts) != 0 {
-		t.Errorf("Expected empty tracker, got %d artifacts", len(tracker.Artifacts))
+	if len(tracker.Assets) != 0 {
+		t.Errorf("Expected empty tracker, got %d assets", len(tracker.Assets))
 	}
 
-	// Test upserting artifact
-	artifact := InstalledArtifact{
+	// Test upserting asset
+	asset := InstalledAsset{
 		Name:       "test-skill",
 		Version:    "1.0.0",
 		Repository: "",
 		Path:       "",
 		Clients:    []string{"claude-code"},
 	}
-	tracker.UpsertArtifact(artifact)
+	tracker.UpsertAsset(asset)
 
-	if len(tracker.Artifacts) != 1 {
-		t.Errorf("Expected 1 artifact after upsert, got %d", len(tracker.Artifacts))
+	if len(tracker.Assets) != 1 {
+		t.Errorf("Expected 1 asset after upsert, got %d", len(tracker.Assets))
 	}
 
-	// Test find artifact
-	key := ArtifactKey{Name: "test-skill", Repository: "", Path: ""}
-	found := tracker.FindArtifact(key)
+	// Test find asset
+	key := AssetKey{Name: "test-skill", Repository: "", Path: ""}
+	found := tracker.FindAsset(key)
 	if found == nil {
-		t.Errorf("FindArtifact() returned nil, expected artifact")
+		t.Errorf("FindAsset() returned nil, expected asset")
 	} else if found.Version != "1.0.0" {
-		t.Errorf("FindArtifact() version = %s, want 1.0.0", found.Version)
+		t.Errorf("FindAsset() version = %s, want 1.0.0", found.Version)
 	}
 
 	// Test IsGlobal
@@ -69,46 +69,46 @@ func TestTrackerOperations(t *testing.T) {
 		t.Errorf("ScopeDescription() = %s, want 'Global'", found.ScopeDescription())
 	}
 
-	// Test repo-scoped artifact
-	repoArtifact := InstalledArtifact{
+	// Test repo-scoped asset
+	repoAsset := InstalledAsset{
 		Name:       "repo-skill",
 		Version:    "2.0.0",
 		Repository: "git@github.com:org/repo.git",
 		Path:       "",
 		Clients:    []string{"cursor"},
 	}
-	tracker.UpsertArtifact(repoArtifact)
+	tracker.UpsertAsset(repoAsset)
 
-	repoKey := ArtifactKey{Name: "repo-skill", Repository: "git@github.com:org/repo.git", Path: ""}
-	foundRepo := tracker.FindArtifact(repoKey)
+	repoKey := AssetKey{Name: "repo-skill", Repository: "git@github.com:org/repo.git", Path: ""}
+	foundRepo := tracker.FindAsset(repoKey)
 	if foundRepo == nil {
-		t.Errorf("FindArtifact() for repo artifact returned nil")
+		t.Errorf("FindAsset() for repo asset returned nil")
 	} else {
 		if foundRepo.IsGlobal() {
-			t.Errorf("IsGlobal() = true for repo-scoped artifact, want false")
+			t.Errorf("IsGlobal() = true for repo-scoped asset, want false")
 		}
 		if foundRepo.ScopeDescription() != "git@github.com:org/repo.git" {
 			t.Errorf("ScopeDescription() = %s, want repo URL", foundRepo.ScopeDescription())
 		}
 	}
 
-	// Test path-scoped artifact
-	pathArtifact := InstalledArtifact{
+	// Test path-scoped asset
+	pathAsset := InstalledAsset{
 		Name:       "path-skill",
 		Version:    "3.0.0",
 		Repository: "git@github.com:org/repo.git",
 		Path:       "/services/api",
 		Clients:    []string{"claude-code", "cursor"},
 	}
-	tracker.UpsertArtifact(pathArtifact)
+	tracker.UpsertAsset(pathAsset)
 
-	pathKey := ArtifactKey{Name: "path-skill", Repository: "git@github.com:org/repo.git", Path: "/services/api"}
-	foundPath := tracker.FindArtifact(pathKey)
+	pathKey := AssetKey{Name: "path-skill", Repository: "git@github.com:org/repo.git", Path: "/services/api"}
+	foundPath := tracker.FindAsset(pathKey)
 	if foundPath == nil {
-		t.Errorf("FindArtifact() for path artifact returned nil")
+		t.Errorf("FindAsset() for path asset returned nil")
 	} else {
 		if foundPath.IsGlobal() {
-			t.Errorf("IsGlobal() = true for path-scoped artifact, want false")
+			t.Errorf("IsGlobal() = true for path-scoped asset, want false")
 		}
 		expectedDesc := "git@github.com:org/repo.git:/services/api"
 		if foundPath.ScopeDescription() != expectedDesc {
@@ -116,24 +116,24 @@ func TestTrackerOperations(t *testing.T) {
 		}
 	}
 
-	// Test remove artifact
-	removed := tracker.RemoveArtifact(key)
+	// Test remove asset
+	removed := tracker.RemoveAsset(key)
 	if !removed {
-		t.Errorf("RemoveArtifact() = false, want true")
+		t.Errorf("RemoveAsset() = false, want true")
 	}
-	if len(tracker.Artifacts) != 2 {
-		t.Errorf("Expected 2 artifacts after remove, got %d", len(tracker.Artifacts))
+	if len(tracker.Assets) != 2 {
+		t.Errorf("Expected 2 assets after remove, got %d", len(tracker.Assets))
 	}
 
 	// Test NeedsInstall
 	if !tracker.NeedsInstall(key, "1.0.0", []string{"claude-code"}) {
-		t.Errorf("NeedsInstall() = false for removed artifact, want true")
+		t.Errorf("NeedsInstall() = false for removed asset, want true")
 	}
 	if tracker.NeedsInstall(repoKey, "2.0.0", []string{"cursor"}) {
-		t.Errorf("NeedsInstall() = true for existing artifact with same version/clients, want false")
+		t.Errorf("NeedsInstall() = true for existing asset with same version/clients, want false")
 	}
 	if !tracker.NeedsInstall(repoKey, "2.1.0", []string{"cursor"}) {
-		t.Errorf("NeedsInstall() = false for artifact with different version, want true")
+		t.Errorf("NeedsInstall() = false for asset with different version, want true")
 	}
 
 	// Test GroupByScope
@@ -145,14 +145,14 @@ func TestTrackerOperations(t *testing.T) {
 	// Test FindByScope
 	repoScoped := tracker.FindByScope("git@github.com:org/repo.git", "")
 	if len(repoScoped) != 1 {
-		t.Errorf("FindByScope() for repo returned %d artifacts, want 1", len(repoScoped))
+		t.Errorf("FindByScope() for repo returned %d assets, want 1", len(repoScoped))
 	}
 }
 
-func TestFindArtifactWithMatcher(t *testing.T) {
+func TestFindAssetWithMatcher(t *testing.T) {
 	tracker := &Tracker{
 		Version: TrackerFormatVersion,
-		Artifacts: []InstalledArtifact{
+		Assets: []InstalledAsset{
 			{
 				Name:       "global-skill",
 				Version:    "1.0.0",
@@ -190,114 +190,114 @@ func TestFindArtifactWithMatcher(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		artName  string
-		repoURL  string
-		path     string
-		wantName string
+		name      string
+		assetName string
+		repoURL   string
+		path      string
+		wantName  string
 	}{
 		{
-			name:     "find global artifact",
-			artName:  "global-skill",
-			repoURL:  "",
-			path:     "",
-			wantName: "global-skill",
+			name:      "find global asset",
+			assetName: "global-skill",
+			repoURL:   "",
+			path:      "",
+			wantName:  "global-skill",
 		},
 		{
-			name:     "find repo artifact with same URL format",
-			artName:  "repo-skill",
-			repoURL:  "git@github.com:org/repo.git",
-			path:     "",
-			wantName: "repo-skill",
+			name:      "find repo asset with same URL format",
+			assetName: "repo-skill",
+			repoURL:   "git@github.com:org/repo.git",
+			path:      "",
+			wantName:  "repo-skill",
 		},
 		{
-			name:     "find repo artifact with different URL format (HTTPS)",
-			artName:  "repo-skill",
-			repoURL:  "https://github.com/org/repo",
-			path:     "",
-			wantName: "repo-skill",
+			name:      "find repo asset with different URL format (HTTPS)",
+			assetName: "repo-skill",
+			repoURL:   "https://github.com/org/repo",
+			path:      "",
+			wantName:  "repo-skill",
 		},
 		{
-			name:     "find path artifact with different URL format",
-			artName:  "path-skill",
-			repoURL:  "https://github.com/org/repo.git",
-			path:     "/services/api",
-			wantName: "path-skill",
+			name:      "find path asset with different URL format",
+			assetName: "path-skill",
+			repoURL:   "https://github.com/org/repo.git",
+			path:      "/services/api",
+			wantName:  "path-skill",
 		},
 		{
-			name:     "not found - wrong path",
-			artName:  "path-skill",
-			repoURL:  "https://github.com/org/repo",
-			path:     "/wrong/path",
-			wantName: "",
+			name:      "not found - wrong path",
+			assetName: "path-skill",
+			repoURL:   "https://github.com/org/repo",
+			path:      "/wrong/path",
+			wantName:  "",
 		},
 		{
-			name:     "not found - wrong name",
-			artName:  "nonexistent",
-			repoURL:  "",
-			path:     "",
-			wantName: "",
+			name:      "not found - wrong name",
+			assetName: "nonexistent",
+			repoURL:   "",
+			path:      "",
+			wantName:  "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tracker.FindArtifactWithMatcher(tt.artName, tt.repoURL, tt.path, matchRepo)
+			got := tracker.FindAssetWithMatcher(tt.assetName, tt.repoURL, tt.path, matchRepo)
 			if tt.wantName == "" {
 				if got != nil {
-					t.Errorf("FindArtifactWithMatcher() = %v, want nil", got.Name)
+					t.Errorf("FindAssetWithMatcher() = %v, want nil", got.Name)
 				}
 			} else {
 				if got == nil {
-					t.Errorf("FindArtifactWithMatcher() = nil, want %s", tt.wantName)
+					t.Errorf("FindAssetWithMatcher() = nil, want %s", tt.wantName)
 				} else if got.Name != tt.wantName {
-					t.Errorf("FindArtifactWithMatcher() = %s, want %s", got.Name, tt.wantName)
+					t.Errorf("FindAssetWithMatcher() = %s, want %s", got.Name, tt.wantName)
 				}
 			}
 		})
 	}
 }
 
-func TestNewArtifactKey(t *testing.T) {
+func TestNewAssetKey(t *testing.T) {
 	tests := []struct {
 		name      string
-		artName   string
+		assetName string
 		scopeType lockfile.ScopeType
 		repoURL   string
 		repoPath  string
-		want      ArtifactKey
+		want      AssetKey
 	}{
 		{
 			name:      "global scope",
-			artName:   "test",
+			assetName: "test",
 			scopeType: lockfile.ScopeGlobal,
 			repoURL:   "https://github.com/org/repo.git",
 			repoPath:  "/path",
-			want:      ArtifactKey{Name: "test", Repository: "", Path: ""},
+			want:      AssetKey{Name: "test", Repository: "", Path: ""},
 		},
 		{
 			name:      "repo scope",
-			artName:   "test",
+			assetName: "test",
 			scopeType: lockfile.ScopeRepo,
 			repoURL:   "https://github.com/org/repo.git",
 			repoPath:  "/path",
-			want:      ArtifactKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: ""},
+			want:      AssetKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: ""},
 		},
 		{
 			name:      "path scope",
-			artName:   "test",
+			assetName: "test",
 			scopeType: lockfile.ScopePath,
 			repoURL:   "https://github.com/org/repo.git",
 			repoPath:  "/path",
-			want:      ArtifactKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: "/path"},
+			want:      AssetKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: "/path"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewArtifactKey(tt.artName, tt.scopeType, tt.repoURL, tt.repoPath)
+			got := NewAssetKey(tt.assetName, tt.scopeType, tt.repoURL, tt.repoPath)
 			if got != tt.want {
-				t.Errorf("NewArtifactKey() = %+v, want %+v", got, tt.want)
+				t.Errorf("NewAssetKey() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

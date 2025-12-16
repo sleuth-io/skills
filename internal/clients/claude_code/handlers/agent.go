@@ -13,7 +13,7 @@ import (
 
 var agentOps = dirasset.NewOperations("agents", &asset.TypeAgent)
 
-// AgentHandler handles agent artifact installation
+// AgentHandler handles agent asset installation
 type AgentHandler struct {
 	metadata *metadata.Metadata
 }
@@ -25,7 +25,7 @@ func NewAgentHandler(meta *metadata.Metadata) *AgentHandler {
 	}
 }
 
-// DetectType returns true if files indicate this is an agent artifact
+// DetectType returns true if files indicate this is an agent asset
 func (h *AgentHandler) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "AGENT.md" || file == "agent.md" {
@@ -35,7 +35,7 @@ func (h *AgentHandler) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *AgentHandler) GetType() string {
 	return "agent"
 }
@@ -44,7 +44,7 @@ func (h *AgentHandler) GetType() string {
 func (h *AgentHandler) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeAgent,
@@ -88,27 +88,27 @@ func (h *AgentHandler) DetectUsageFromToolCall(toolName string, toolInput map[st
 	return agentName, ok
 }
 
-// Install extracts and installs the agent artifact
+// Install extracts and installs the agent asset
 func (h *AgentHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
 	// Validate zip structure
 	if err := h.Validate(zipData); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	return agentOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name)
+	return agentOps.Install(ctx, zipData, targetBase, h.metadata.Asset.Name)
 }
 
-// Remove uninstalls the agent artifact
+// Remove uninstalls the agent asset
 func (h *AgentHandler) Remove(ctx context.Context, targetBase string) error {
-	return agentOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
+	return agentOps.Remove(ctx, targetBase, h.metadata.Asset.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
 func (h *AgentHandler) GetInstallPath() string {
-	return filepath.Join("agents", h.metadata.Artifact.Name)
+	return filepath.Join("agents", h.metadata.Asset.Name)
 }
 
-// Validate checks if the zip structure is valid for an agent artifact
+// Validate checks if the zip structure is valid for an agent asset
 func (h *AgentHandler) Validate(zipData []byte) error {
 	// List files in zip
 	files, err := utils.ListZipFiles(zipData)
@@ -137,9 +137,9 @@ func (h *AgentHandler) Validate(zipData []byte) error {
 		return fmt.Errorf("metadata validation failed: %w", err)
 	}
 
-	// Verify artifact type matches
-	if meta.Artifact.Type != asset.TypeAgent {
-		return fmt.Errorf("artifact type mismatch: expected agent, got %s", meta.Artifact.Type)
+	// Verify asset type matches
+	if meta.Asset.Type != asset.TypeAgent {
+		return fmt.Errorf("asset type mismatch: expected agent, got %s", meta.Asset.Type)
 	}
 
 	// Check that prompt file exists
@@ -161,5 +161,5 @@ func (h *AgentHandler) CanDetectInstalledState() bool {
 
 // VerifyInstalled checks if the agent is properly installed
 func (h *AgentHandler) VerifyInstalled(targetBase string) (bool, string) {
-	return agentOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+	return agentOps.VerifyInstalled(targetBase, h.metadata.Asset.Name, h.metadata.Asset.Version)
 }

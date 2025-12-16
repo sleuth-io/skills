@@ -8,7 +8,7 @@ import (
 
 // TestMCPMetadataRoundTrip tests that MCP metadata can be parsed and serialized without losing data
 func TestMCPMetadataRoundTrip(t *testing.T) {
-	originalTOML := `[artifact]
+	originalTOML := `[asset]
 name = "test-mcp"
 version = "1.0.0"
 type = "mcp"
@@ -33,12 +33,12 @@ args = [
 	}
 
 	// Check fields are preserved
-	if meta.Artifact.Name != "test-mcp" {
-		t.Errorf("Name not preserved: got %q, want %q", meta.Artifact.Name, "test-mcp")
+	if meta.Asset.Name != "test-mcp" {
+		t.Errorf("Name not preserved: got %q, want %q", meta.Asset.Name, "test-mcp")
 	}
 
-	if meta.Artifact.Type != asset.TypeMCP {
-		t.Errorf("Type not preserved: got %q, want %q", meta.Artifact.Type, asset.TypeMCP)
+	if meta.Asset.Type != asset.TypeMCP {
+		t.Errorf("Type not preserved: got %q, want %q", meta.Asset.Type, asset.TypeMCP)
 	}
 
 	if meta.MCP == nil {

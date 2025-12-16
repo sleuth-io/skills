@@ -57,10 +57,10 @@ func (c *Client) GetVersion() string {
 	return string(output)
 }
 
-// InstallArtifacts installs artifacts to Claude Code using client-specific handlers
-func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallRequest) (clients.InstallResponse, error) {
+// InstallAssets installs assets to Claude Code using client-specific handlers
+func (c *Client) InstallAssets(ctx context.Context, req clients.InstallRequest) (clients.InstallResponse, error) {
 	resp := clients.InstallResponse{
-		Results: make([]clients.ArtifactResult, 0, len(req.Artifacts)),
+		Results: make([]clients.AssetResult, 0, len(req.Assets)),
 	}
 
 	// Determine target directory based on scope
@@ -71,14 +71,14 @@ func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallReques
 		return resp, fmt.Errorf("failed to create target directory: %w", err)
 	}
 
-	// Install each artifact using appropriate handler
-	for _, bundle := range req.Artifacts {
-		result := clients.ArtifactResult{
-			ArtifactName: bundle.Artifact.Name,
+	// Install each asset using appropriate handler
+	for _, bundle := range req.Assets {
+		result := clients.AssetResult{
+			AssetName: bundle.Asset.Name,
 		}
 
 		var err error
-		switch bundle.Metadata.Artifact.Type {
+		switch bundle.Metadata.Asset.Type {
 		case asset.TypeSkill:
 			handler := handlers.NewSkillHandler(bundle.Metadata)
 			err = handler.Install(ctx, bundle.ZipData, targetBase)
@@ -98,7 +98,7 @@ func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallReques
 			handler := handlers.NewMCPRemoteHandler(bundle.Metadata)
 			err = handler.Install(ctx, bundle.ZipData, targetBase)
 		default:
-			err = fmt.Errorf("unsupported artifact type: %s", bundle.Metadata.Artifact.Type.Key)
+			err = fmt.Errorf("unsupported asset type: %s", bundle.Metadata.Asset.Type.Key)
 		}
 
 		if err != nil {
@@ -116,29 +116,29 @@ func (c *Client) InstallArtifacts(ctx context.Context, req clients.InstallReques
 	return resp, nil
 }
 
-// UninstallArtifacts removes artifacts from Claude Code
-func (c *Client) UninstallArtifacts(ctx context.Context, req clients.UninstallRequest) (clients.UninstallResponse, error) {
+// UninstallAssets removes assets from Claude Code
+func (c *Client) UninstallAssets(ctx context.Context, req clients.UninstallRequest) (clients.UninstallResponse, error) {
 	resp := clients.UninstallResponse{
-		Results: make([]clients.ArtifactResult, 0, len(req.Artifacts)),
+		Results: make([]clients.AssetResult, 0, len(req.Assets)),
 	}
 
 	targetBase := c.determineTargetBase(req.Scope)
 
-	for _, art := range req.Artifacts {
-		result := clients.ArtifactResult{
-			ArtifactName: art.Name,
+	for _, a := range req.Assets {
+		result := clients.AssetResult{
+			AssetName: a.Name,
 		}
 
 		// Create minimal metadata for removal
 		meta := &metadata.Metadata{
-			Artifact: metadata.Artifact{
-				Name: art.Name,
-				Type: art.Type,
+			Asset: metadata.Asset{
+				Name: a.Name,
+				Type: a.Type,
 			},
 		}
 
 		var err error
-		switch art.Type {
+		switch a.Type {
 		case asset.TypeSkill:
 			handler := handlers.NewSkillHandler(meta)
 			err = handler.Remove(ctx, targetBase)
@@ -158,7 +158,7 @@ func (c *Client) UninstallArtifacts(ctx context.Context, req clients.UninstallRe
 			handler := handlers.NewMCPRemoteHandler(meta)
 			err = handler.Remove(ctx, targetBase)
 		default:
-			err = fmt.Errorf("unsupported artifact type: %s", art.Type.Key)
+			err = fmt.Errorf("unsupported asset type: %s", a.Type.Key)
 		}
 
 		if err != nil {
@@ -191,8 +191,8 @@ func (c *Client) determineTargetBase(scope *clients.InstallScope) string {
 	}
 }
 
-// ListSkills returns all installed skills for a given scope
-func (c *Client) ListSkills(ctx context.Context, scope *clients.InstallScope) ([]clients.InstalledSkill, error) {
+// ListAssets returns all installed skills for a given scope
+func (c *Client) ListAssets(ctx context.Context, scope *clients.InstallScope) ([]clients.InstalledSkill, error) {
 	targetBase := c.determineTargetBase(scope)
 
 	installed, err := skillOps.ScanInstalled(targetBase)
@@ -231,9 +231,9 @@ func (c *Client) ReadSkill(ctx context.Context, name string, scope *clients.Inst
 	}, nil
 }
 
-// EnsureSkillsSupport is a no-op for Claude Code since it loads global rules fine.
+// EnsureAssetSupport is a no-op for Claude Code since it loads global rules fine.
 // This method exists to satisfy the Client interface.
-func (c *Client) EnsureSkillsSupport(ctx context.Context, scope *clients.InstallScope) error {
+func (c *Client) EnsureAssetSupport(ctx context.Context, scope *clients.InstallScope) error {
 	// Claude Code loads global rules, so no special setup needed
 	return nil
 }
@@ -255,21 +255,21 @@ func (c *Client) ShouldInstall(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// VerifyArtifacts checks if artifacts are actually installed on the filesystem
-func (c *Client) VerifyArtifacts(ctx context.Context, artifacts []*lockfile.Artifact, scope *clients.InstallScope) []clients.VerifyResult {
+// VerifyAssets checks if assets are actually installed on the filesystem
+func (c *Client) VerifyAssets(ctx context.Context, assets []*lockfile.Asset, scope *clients.InstallScope) []clients.VerifyResult {
 	targetBase := c.determineTargetBase(scope)
-	results := make([]clients.VerifyResult, 0, len(artifacts))
+	results := make([]clients.VerifyResult, 0, len(assets))
 
-	for _, art := range artifacts {
+	for _, a := range assets {
 		result := clients.VerifyResult{
-			Artifact: art,
+			Asset: a,
 		}
 
-		handler, err := handlers.NewHandler(art.Type, &metadata.Metadata{
-			Artifact: metadata.Artifact{
-				Name:    art.Name,
-				Version: art.Version,
-				Type:    art.Type,
+		handler, err := handlers.NewHandler(a.Type, &metadata.Metadata{
+			Asset: metadata.Asset{
+				Name:    a.Name,
+				Version: a.Version,
+				Type:    a.Type,
 			},
 		})
 		if err != nil {

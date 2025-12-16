@@ -8,12 +8,12 @@ import (
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
-// Handler defines the interface for artifact type handlers
+// Handler defines the interface for asset type handlers
 type Handler interface {
-	// Install installs the artifact from zip data to the target base directory
+	// Install installs the asset from zip data to the target base directory
 	Install(ctx context.Context, zipData []byte, targetBase string) error
 
-	// Remove removes the artifact from the target base directory
+	// Remove removes the asset from the target base directory
 	Remove(ctx context.Context, targetBase string) error
 
 	// GetInstallPath returns the installation path relative to targetBase
@@ -22,14 +22,14 @@ type Handler interface {
 	// CanDetectInstalledState returns true if the handler can verify installation state
 	CanDetectInstalledState() bool
 
-	// VerifyInstalled checks if the artifact is properly installed
+	// VerifyInstalled checks if the asset is properly installed
 	// Returns (installed bool, message string)
 	VerifyInstalled(targetBase string) (bool, string)
 }
 
-// NewHandler creates a handler for the given artifact type and metadata
-func NewHandler(artifactType asset.Type, meta *metadata.Metadata) (Handler, error) {
-	switch artifactType {
+// NewHandler creates a handler for the given asset type and metadata
+func NewHandler(assetType asset.Type, meta *metadata.Metadata) (Handler, error) {
+	switch assetType {
 	case asset.TypeSkill:
 		return NewSkillHandler(meta), nil
 	case asset.TypeAgent:
@@ -43,6 +43,6 @@ func NewHandler(artifactType asset.Type, meta *metadata.Metadata) (Handler, erro
 	case asset.TypeMCPRemote:
 		return NewMCPRemoteHandler(meta), nil
 	default:
-		return nil, fmt.Errorf("unsupported artifact type: %s", artifactType.Key)
+		return nil, fmt.Errorf("unsupported asset type: %s", assetType.Key)
 	}
 }

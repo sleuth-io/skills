@@ -15,7 +15,7 @@ import (
 
 var mcpOps = dirasset.NewOperations("mcp-servers", &asset.TypeMCP)
 
-// MCPHandler handles MCP artifact installation for Cursor
+// MCPHandler handles MCP asset installation for Cursor
 type MCPHandler struct {
 	metadata *metadata.Metadata
 }
@@ -25,7 +25,7 @@ func NewMCPHandler(meta *metadata.Metadata) *MCPHandler {
 	return &MCPHandler{metadata: meta}
 }
 
-// Install installs an MCP artifact to Cursor by updating mcp.json
+// Install installs an MCP asset to Cursor by updating mcp.json
 func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
 	mcpConfigPath := filepath.Join(targetBase, "mcp.json")
 
@@ -36,7 +36,7 @@ func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase str
 	}
 
 	// Extract MCP server files to .cursor/mcp-servers/{name}/
-	serverDir := filepath.Join(targetBase, "mcp-servers", h.metadata.Artifact.Name)
+	serverDir := filepath.Join(targetBase, "mcp-servers", h.metadata.Asset.Name)
 	if err := utils.ExtractZip(zipData, serverDir); err != nil {
 		return fmt.Errorf("failed to extract MCP server: %w", err)
 	}
@@ -48,7 +48,7 @@ func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase str
 	if config.MCPServers == nil {
 		config.MCPServers = make(map[string]interface{})
 	}
-	config.MCPServers[h.metadata.Artifact.Name] = entry
+	config.MCPServers[h.metadata.Asset.Name] = entry
 
 	// Write updated mcp.json
 	if err := WriteMCPConfig(mcpConfigPath, config); err != nil {
@@ -69,7 +69,7 @@ func (h *MCPHandler) Remove(ctx context.Context, targetBase string) error {
 	}
 
 	// Remove entry
-	delete(config.MCPServers, h.metadata.Artifact.Name)
+	delete(config.MCPServers, h.metadata.Asset.Name)
 
 	// Write updated mcp.json
 	if err := WriteMCPConfig(mcpConfigPath, config); err != nil {
@@ -77,7 +77,7 @@ func (h *MCPHandler) Remove(ctx context.Context, targetBase string) error {
 	}
 
 	// Remove server directory (if exists)
-	serverDir := filepath.Join(targetBase, "mcp-servers", h.metadata.Artifact.Name)
+	serverDir := filepath.Join(targetBase, "mcp-servers", h.metadata.Asset.Name)
 	os.RemoveAll(serverDir) // Ignore errors if doesn't exist
 
 	return nil
@@ -154,5 +154,5 @@ func WriteMCPConfig(path string, config *MCPConfig) error {
 
 // VerifyInstalled checks if the MCP server is properly installed
 func (h *MCPHandler) VerifyInstalled(targetBase string) (bool, string) {
-	return mcpOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+	return mcpOps.VerifyInstalled(targetBase, h.metadata.Asset.Name, h.metadata.Asset.Version)
 }

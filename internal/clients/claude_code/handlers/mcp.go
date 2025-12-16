@@ -16,7 +16,7 @@ import (
 
 var mcpOps = dirasset.NewOperations("mcp-servers", &asset.TypeMCP)
 
-// MCPHandler handles MCP server artifact installation
+// MCPHandler handles MCP server asset installation
 type MCPHandler struct {
 	metadata *metadata.Metadata
 }
@@ -28,7 +28,7 @@ func NewMCPHandler(meta *metadata.Metadata) *MCPHandler {
 	}
 }
 
-// DetectType returns true if files indicate this is an MCP artifact
+// DetectType returns true if files indicate this is an MCP asset
 func (h *MCPHandler) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "package.json" {
@@ -38,7 +38,7 @@ func (h *MCPHandler) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *MCPHandler) GetType() string {
 	return "mcp"
 }
@@ -47,7 +47,7 @@ func (h *MCPHandler) GetType() string {
 func (h *MCPHandler) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeMCP,
@@ -89,7 +89,7 @@ func (h *MCPHandler) DetectUsageFromToolCall(toolName string, toolInput map[stri
 	return serverName, true
 }
 
-// Install extracts and installs the MCP server artifact
+// Install extracts and installs the MCP server asset
 func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
 	// Validate zip structure
 	if err := h.Validate(zipData); err != nil {
@@ -97,7 +97,7 @@ func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase str
 	}
 
 	// Extract to mcp-servers directory
-	if err := mcpOps.Install(ctx, zipData, targetBase, h.metadata.Artifact.Name); err != nil {
+	if err := mcpOps.Install(ctx, zipData, targetBase, h.metadata.Asset.Name); err != nil {
 		return err
 	}
 
@@ -110,7 +110,7 @@ func (h *MCPHandler) Install(ctx context.Context, zipData []byte, targetBase str
 	return nil
 }
 
-// Remove uninstalls the MCP server artifact
+// Remove uninstalls the MCP server asset
 func (h *MCPHandler) Remove(ctx context.Context, targetBase string) error {
 	// Remove from .mcp.json first
 	if err := h.removeFromMCPConfig(targetBase); err != nil {
@@ -118,15 +118,15 @@ func (h *MCPHandler) Remove(ctx context.Context, targetBase string) error {
 	}
 
 	// Remove installation directory
-	return mcpOps.Remove(ctx, targetBase, h.metadata.Artifact.Name)
+	return mcpOps.Remove(ctx, targetBase, h.metadata.Asset.Name)
 }
 
 // GetInstallPath returns the installation path relative to targetBase
 func (h *MCPHandler) GetInstallPath() string {
-	return filepath.Join("mcp-servers", h.metadata.Artifact.Name)
+	return filepath.Join("mcp-servers", h.metadata.Asset.Name)
 }
 
-// Validate checks if the zip structure is valid for an MCP artifact
+// Validate checks if the zip structure is valid for an MCP asset
 func (h *MCPHandler) Validate(zipData []byte) error {
 	// List files in zip
 	files, err := utils.ListZipFiles(zipData)
@@ -155,9 +155,9 @@ func (h *MCPHandler) Validate(zipData []byte) error {
 		return fmt.Errorf("metadata validation failed: %w", err)
 	}
 
-	// Verify artifact type matches
-	if meta.Artifact.Type != asset.TypeMCP {
-		return fmt.Errorf("artifact type mismatch: expected mcp, got %s", meta.Artifact.Type)
+	// Verify asset type matches
+	if meta.Asset.Type != asset.TypeMCP {
+		return fmt.Errorf("asset type mismatch: expected mcp, got %s", meta.Asset.Type)
 	}
 
 	// Check that MCP config exists
@@ -198,7 +198,7 @@ func (h *MCPHandler) updateMCPConfig(targetBase, installPath string) error {
 	serverConfig := h.buildMCPServerConfig(installPath)
 
 	// Add/update MCP server entry
-	mcpServers[h.metadata.Artifact.Name] = serverConfig
+	mcpServers[h.metadata.Asset.Name] = serverConfig
 
 	// Write updated config
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -239,7 +239,7 @@ func (h *MCPHandler) removeFromMCPConfig(targetBase string) error {
 	mcpServers := config["mcpServers"].(map[string]interface{})
 
 	// Remove this MCP server
-	delete(mcpServers, h.metadata.Artifact.Name)
+	delete(mcpServers, h.metadata.Asset.Name)
 
 	// Write updated config
 	data, err = json.MarshalIndent(config, "", "  ")
@@ -278,7 +278,7 @@ func (h *MCPHandler) buildMCPServerConfig(installPath string) map[string]interfa
 	config := map[string]interface{}{
 		"command":   command,
 		"args":      args,
-		"_artifact": h.metadata.Artifact.Name,
+		"_artifact": h.metadata.Asset.Name,
 	}
 
 	// Add optional fields
@@ -299,5 +299,5 @@ func (h *MCPHandler) CanDetectInstalledState() bool {
 
 // VerifyInstalled checks if the MCP server is properly installed
 func (h *MCPHandler) VerifyInstalled(targetBase string) (bool, string) {
-	return mcpOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+	return mcpOps.VerifyInstalled(targetBase, h.metadata.Asset.Name, h.metadata.Asset.Version)
 }

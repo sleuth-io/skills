@@ -8,7 +8,7 @@ import (
 
 func TestParseValidMetadata(t *testing.T) {
 	metadataData := []byte(`
-[artifact]
+[asset]
 name = "test-skill"
 version = "1.0.0"
 type = "skill"
@@ -21,20 +21,20 @@ authors = ["Test Author <test@example.com>"]
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	if meta.Artifact.Name != "test-skill" {
-		t.Errorf("Expected name test-skill, got %s", meta.Artifact.Name)
+	if meta.Asset.Name != "test-skill" {
+		t.Errorf("Expected name test-skill, got %s", meta.Asset.Name)
 	}
 
-	if meta.Artifact.Version != "1.0.0" {
-		t.Errorf("Expected version 1.0.0, got %s", meta.Artifact.Version)
+	if meta.Asset.Version != "1.0.0" {
+		t.Errorf("Expected version 1.0.0, got %s", meta.Asset.Version)
 	}
 
-	if meta.Artifact.Type != asset.TypeSkill {
-		t.Errorf("Expected type skill, got %s", meta.Artifact.Type)
+	if meta.Asset.Type != asset.TypeSkill {
+		t.Errorf("Expected type skill, got %s", meta.Asset.Type)
 	}
 
-	if len(meta.Artifact.Authors) > 0 && meta.Artifact.Authors[0] != "Test Author <test@example.com>" {
-		t.Errorf("Expected author 'Test Author <test@example.com>', got %s", meta.Artifact.Authors[0])
+	if len(meta.Asset.Authors) > 0 && meta.Asset.Authors[0] != "Test Author <test@example.com>" {
+		t.Errorf("Expected author 'Test Author <test@example.com>', got %s", meta.Asset.Authors[0])
 	}
 }
 
@@ -47,7 +47,7 @@ func TestValidateMetadata(t *testing.T) {
 		{
 			name: "valid metadata",
 			metadata: &Metadata{
-				Artifact: Artifact{
+				Asset: Asset{
 					Name:        "test-skill",
 					Version:     "1.0.0",
 					Type:        asset.TypeSkill,
@@ -63,7 +63,7 @@ func TestValidateMetadata(t *testing.T) {
 		{
 			name: "missing name",
 			metadata: &Metadata{
-				Artifact: Artifact{
+				Asset: Asset{
 					Version:     "1.0.0",
 					Type:        asset.TypeSkill,
 					Description: "A test skill",
@@ -74,7 +74,7 @@ func TestValidateMetadata(t *testing.T) {
 		{
 			name: "invalid semver",
 			metadata: &Metadata{
-				Artifact: Artifact{
+				Asset: Asset{
 					Name:        "test-skill",
 					Version:     "invalid",
 					Type:        asset.TypeSkill,
@@ -86,7 +86,7 @@ func TestValidateMetadata(t *testing.T) {
 		{
 			name: "missing description",
 			metadata: &Metadata{
-				Artifact: Artifact{
+				Asset: Asset{
 					Name:    "test-skill",
 					Version: "1.0.0",
 					Type:    asset.TypeSkill,
@@ -108,7 +108,7 @@ func TestValidateMetadata(t *testing.T) {
 
 func TestMetadataWithDependencies(t *testing.T) {
 	metadataData := []byte(`
-[artifact]
+[asset]
 name = "test-skill"
 version = "1.0.0"
 type = "skill"
@@ -121,15 +121,15 @@ dependencies = ["dep1", "dep2"]
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	if len(meta.Artifact.Dependencies) != 2 {
-		t.Fatalf("Expected 2 dependencies, got %d", len(meta.Artifact.Dependencies))
+	if len(meta.Asset.Dependencies) != 2 {
+		t.Fatalf("Expected 2 dependencies, got %d", len(meta.Asset.Dependencies))
 	}
 
-	if meta.Artifact.Dependencies[0] != "dep1" {
-		t.Errorf("Expected first dependency 'dep1', got %s", meta.Artifact.Dependencies[0])
+	if meta.Asset.Dependencies[0] != "dep1" {
+		t.Errorf("Expected first dependency 'dep1', got %s", meta.Asset.Dependencies[0])
 	}
 
-	if meta.Artifact.Dependencies[1] != "dep2" {
-		t.Errorf("Expected second dependency 'dep2', got %s", meta.Artifact.Dependencies[1])
+	if meta.Asset.Dependencies[1] != "dep2" {
+		t.Errorf("Expected second dependency 'dep2', got %s", meta.Asset.Dependencies[1])
 	}
 }

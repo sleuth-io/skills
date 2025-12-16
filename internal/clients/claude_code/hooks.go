@@ -11,7 +11,7 @@ import (
 )
 
 // installHooks installs system hooks for Claude Code (auto-update and usage tracking).
-// This is different from installing hook artifacts - these are the skills CLI's own hooks.
+// This is different from installing hook assets - these are the skills CLI's own hooks.
 func installHooks() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -36,7 +36,7 @@ func installHooks() error {
 	return nil
 }
 
-// installSessionStartHook installs the SessionStart hook for auto-updating artifacts
+// installSessionStartHook installs the SessionStart hook for auto-updating assets
 func installSessionStartHook(claudeDir string) error {
 	settingsPath := filepath.Join(claudeDir, "settings.json")
 	log := logger.Get()

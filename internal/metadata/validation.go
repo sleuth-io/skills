@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	// nameRegex matches valid artifact names (alphanumeric, dashes, underscores)
+	// nameRegex matches valid asset names (alphanumeric, dashes, underscores)
 	nameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 	// Valid hook events
@@ -25,16 +25,16 @@ var (
 
 // Validate validates the entire metadata structure
 func (m *Metadata) Validate() error {
-	// Validate artifact section
-	if err := m.Artifact.Validate(); err != nil {
-		return fmt.Errorf("artifact: %w", err)
+	// Validate asset section
+	if err := m.Asset.Validate(); err != nil {
+		return fmt.Errorf("asset: %w", err)
 	}
 
 	// Validate type-specific configuration
-	switch m.Artifact.Type {
+	switch m.Asset.Type {
 	case asset.TypeSkill:
 		if m.Skill == nil {
-			return fmt.Errorf("[skill] section is required for skill artifacts")
+			return fmt.Errorf("[skill] section is required for skill assets")
 		}
 		if err := m.Skill.Validate(); err != nil {
 			return fmt.Errorf("skill: %w", err)
@@ -42,7 +42,7 @@ func (m *Metadata) Validate() error {
 
 	case asset.TypeCommand:
 		if m.Command == nil {
-			return fmt.Errorf("[command] section is required for command artifacts")
+			return fmt.Errorf("[command] section is required for command assets")
 		}
 		if err := m.Command.Validate(); err != nil {
 			return fmt.Errorf("command: %w", err)
@@ -50,7 +50,7 @@ func (m *Metadata) Validate() error {
 
 	case asset.TypeAgent:
 		if m.Agent == nil {
-			return fmt.Errorf("[agent] section is required for agent artifacts")
+			return fmt.Errorf("[agent] section is required for agent assets")
 		}
 		if err := m.Agent.Validate(); err != nil {
 			return fmt.Errorf("agent: %w", err)
@@ -58,7 +58,7 @@ func (m *Metadata) Validate() error {
 
 	case asset.TypeHook:
 		if m.Hook == nil {
-			return fmt.Errorf("[hook] section is required for hook artifacts")
+			return fmt.Errorf("[hook] section is required for hook assets")
 		}
 		if err := m.Hook.Validate(); err != nil {
 			return fmt.Errorf("hook: %w", err)
@@ -66,7 +66,7 @@ func (m *Metadata) Validate() error {
 
 	case asset.TypeMCP, asset.TypeMCPRemote:
 		if m.MCP == nil {
-			return fmt.Errorf("[mcp] section is required for %s artifacts", m.Artifact.Type)
+			return fmt.Errorf("[mcp] section is required for %s assets", m.Asset.Type)
 		}
 		if err := m.MCP.Validate(); err != nil {
 			return fmt.Errorf("mcp: %w", err)
@@ -76,8 +76,8 @@ func (m *Metadata) Validate() error {
 	return nil
 }
 
-// Validate validates the [artifact] section
-func (a *Artifact) Validate() error {
+// Validate validates the [asset] section
+func (a *Asset) Validate() error {
 	// Validate required fields
 	if a.Name == "" {
 		return fmt.Errorf("name is required")
@@ -97,7 +97,7 @@ func (a *Artifact) Validate() error {
 	}
 
 	if !a.Type.IsValid() {
-		return fmt.Errorf("invalid artifact type: %s (must be one of: skill, command, agent, hook, mcp, mcp-remote)", a.Type)
+		return fmt.Errorf("invalid asset type: %s (must be one of: skill, command, agent, hook, mcp, mcp-remote)", a.Type)
 	}
 
 	return nil

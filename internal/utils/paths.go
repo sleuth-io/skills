@@ -43,8 +43,8 @@ func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0755)
 }
 
-// GetClaudeDir returns the path to the .claude directory for artifact installation
-// This is where global artifacts are installed
+// GetClaudeDir returns the path to the .claude directory for asset installation
+// This is where global assets are installed
 func GetClaudeDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

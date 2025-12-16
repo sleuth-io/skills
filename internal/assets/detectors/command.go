@@ -7,16 +7,16 @@ import (
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
-// CommandHandler handles command artifact installation
+// CommandDetector detects command assets
 type CommandDetector struct{}
 
 // Compile-time interface checks
 var (
-	_ ArtifactTypeDetector = (*CommandDetector)(nil)
-	_ UsageDetector        = (*CommandDetector)(nil)
+	_ AssetTypeDetector = (*CommandDetector)(nil)
+	_ UsageDetector     = (*CommandDetector)(nil)
 )
 
-// DetectType returns true if files indicate this is a command artifact
+// DetectType returns true if files indicate this is a command asset
 func (h *CommandDetector) DetectType(files []string) bool {
 	for _, file := range files {
 		if file == "COMMAND.md" || file == "command.md" {
@@ -26,7 +26,7 @@ func (h *CommandDetector) DetectType(files []string) bool {
 	return false
 }
 
-// GetType returns the artifact type string
+// GetType returns the asset type string
 func (h *CommandDetector) GetType() string {
 	return "command"
 }
@@ -35,7 +35,7 @@ func (h *CommandDetector) GetType() string {
 func (h *CommandDetector) CreateDefaultMetadata(name, version string) *metadata.Metadata {
 	return &metadata.Metadata{
 		MetadataVersion: "1.0",
-		Artifact: metadata.Artifact{
+		Asset: metadata.Asset{
 			Name:    name,
 			Version: version,
 			Type:    asset.TypeCommand,

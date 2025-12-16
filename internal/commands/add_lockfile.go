@@ -4,31 +4,31 @@ import (
 	"context"
 
 	"github.com/sleuth-io/skills/internal/lockfile"
-	"github.com/sleuth-io/skills/internal/vault"
 	"github.com/sleuth-io/skills/internal/ui/components"
+	"github.com/sleuth-io/skills/internal/vault"
 )
 
-// updateLockFile updates the repository's lock file with the artifact using modern UI
-func updateLockFile(ctx context.Context, out *outputHelper, repo vault.Vault, artifact *lockfile.Artifact) error {
+// updateLockFile updates the repository's lock file with the asset using modern UI
+func updateLockFile(ctx context.Context, out *outputHelper, repo vault.Vault, asset *lockfile.Asset) error {
 	status := components.NewStatus(out.cmd.OutOrStdout())
 
 	// For git repos, update the lock file and commit
 	if gitRepo, ok := repo.(*vault.GitVault); ok {
 		status.Start("Updating repository lock file")
 		lockFilePath := gitRepo.GetLockFilePath()
-		if err := lockfile.AddOrUpdateArtifact(lockFilePath, artifact); err != nil {
+		if err := lockfile.AddOrUpdateAsset(lockFilePath, asset); err != nil {
 			status.Fail("Failed to update lock file")
 			return err
 		}
 
-		if artifact.IsGlobal() {
+		if asset.IsGlobal() {
 			status.Done("Updated lock file (global installation)")
 		} else {
 			status.Done("Updated lock file with repository installation(s)")
 		}
 
 		status.Start("Committing and pushing to repository")
-		if err := gitRepo.CommitAndPush(ctx, artifact); err != nil {
+		if err := gitRepo.CommitAndPush(ctx, asset); err != nil {
 			status.Fail("Failed to push changes")
 			return err
 		}
@@ -40,12 +40,12 @@ func updateLockFile(ctx context.Context, out *outputHelper, repo vault.Vault, ar
 	if pathRepo, ok := repo.(*vault.PathVault); ok {
 		status.Start("Updating repository lock file")
 		lockFilePath := pathRepo.GetLockFilePath()
-		if err := lockfile.AddOrUpdateArtifact(lockFilePath, artifact); err != nil {
+		if err := lockfile.AddOrUpdateAsset(lockFilePath, asset); err != nil {
 			status.Fail("Failed to update lock file")
 			return err
 		}
 
-		if artifact.IsGlobal() {
+		if asset.IsGlobal() {
 			status.Done("Updated lock file (global installation)")
 		} else {
 			status.Done("Updated lock file with repository installation(s)")

@@ -4,35 +4,35 @@ import (
 	"github.com/sleuth-io/skills/internal/metadata"
 )
 
-// ArtifactTypeDetector detects artifact types from file structures
-type ArtifactTypeDetector interface {
-	// DetectType returns true if the file list matches this artifact type
+// AssetTypeDetector detects asset types from file structures
+type AssetTypeDetector interface {
+	// DetectType returns true if the file list matches this asset type
 	DetectType(files []string) bool
 
-	// GetType returns the artifact type string
+	// GetType returns the asset type string
 	GetType() string
 
 	// CreateDefaultMetadata creates default metadata for this type
 	CreateDefaultMetadata(name, version string) *metadata.Metadata
 }
 
-// UsageDetector provides methods to detect artifact usage from tool calls
+// UsageDetector provides methods to detect asset usage from tool calls
 type UsageDetector interface {
-	// DetectUsageFromToolCall checks if this handler's artifact type was used in a tool call
-	// Returns (artifact_name, detected)
+	// DetectUsageFromToolCall checks if this handler's asset type was used in a tool call
+	// Returns (asset_name, detected)
 	DetectUsageFromToolCall(toolName string, toolInput map[string]interface{}) (string, bool)
 }
 
 // detectorRegistry holds all registered detectors
-var detectorRegistry []func() ArtifactTypeDetector
+var detectorRegistry []func() AssetTypeDetector
 
 // RegisterDetector registers a detector factory function
-func RegisterDetector(factory func() ArtifactTypeDetector) {
+func RegisterDetector(factory func() AssetTypeDetector) {
 	detectorRegistry = append(detectorRegistry, factory)
 }
 
-// DetectArtifactType detects the artifact type from a list of files
-func DetectArtifactType(files []string, name, version string) *metadata.Metadata {
+// DetectAssetType detects the asset type from a list of files
+func DetectAssetType(files []string, name, version string) *metadata.Metadata {
 	for _, factory := range detectorRegistry {
 		detector := factory()
 		if detector.DetectType(files) {
@@ -46,9 +46,9 @@ func DetectArtifactType(files []string, name, version string) *metadata.Metadata
 
 func init() {
 	// Register all detectors
-	RegisterDetector(func() ArtifactTypeDetector { return &SkillDetector{} })
-	RegisterDetector(func() ArtifactTypeDetector { return &AgentDetector{} })
-	RegisterDetector(func() ArtifactTypeDetector { return &CommandDetector{} })
-	RegisterDetector(func() ArtifactTypeDetector { return &HookDetector{} })
-	RegisterDetector(func() ArtifactTypeDetector { return &MCPDetector{} })
+	RegisterDetector(func() AssetTypeDetector { return &SkillDetector{} })
+	RegisterDetector(func() AssetTypeDetector { return &AgentDetector{} })
+	RegisterDetector(func() AssetTypeDetector { return &CommandDetector{} })
+	RegisterDetector(func() AssetTypeDetector { return &HookDetector{} })
+	RegisterDetector(func() AssetTypeDetector { return &MCPDetector{} })
 }

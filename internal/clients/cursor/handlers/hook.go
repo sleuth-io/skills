@@ -15,7 +15,7 @@ import (
 
 var hookOps = dirasset.NewOperations("hooks", &asset.TypeHook)
 
-// HookHandler handles hook artifact installation for Cursor
+// HookHandler handles hook asset installation for Cursor
 type HookHandler struct {
 	metadata *metadata.Metadata
 }
@@ -25,7 +25,7 @@ func NewHookHandler(meta *metadata.Metadata) *HookHandler {
 	return &HookHandler{metadata: meta}
 }
 
-// Install installs a hook artifact to Cursor by extracting scripts and updating hooks.json
+// Install installs a hook asset to Cursor by extracting scripts and updating hooks.json
 func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase string) error {
 	// Validate hook configuration
 	if err := h.Validate(zipData); err != nil {
@@ -33,7 +33,7 @@ func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase st
 	}
 
 	// Extract to .cursor/hooks/{name}/
-	installPath := filepath.Join(targetBase, "hooks", h.metadata.Artifact.Name)
+	installPath := filepath.Join(targetBase, "hooks", h.metadata.Asset.Name)
 	if err := os.RemoveAll(installPath); err != nil {
 		return fmt.Errorf("failed to remove existing hook: %w", err)
 	}
@@ -52,7 +52,7 @@ func (h *HookHandler) Install(ctx context.Context, zipData []byte, targetBase st
 	return nil
 }
 
-// Remove uninstalls a hook artifact from Cursor
+// Remove uninstalls a hook asset from Cursor
 func (h *HookHandler) Remove(ctx context.Context, targetBase string) error {
 	// Remove from hooks.json
 	if err := h.removeFromHooksJSON(targetBase); err != nil {
@@ -60,7 +60,7 @@ func (h *HookHandler) Remove(ctx context.Context, targetBase string) error {
 	}
 
 	// Remove directory
-	installPath := filepath.Join(targetBase, "hooks", h.metadata.Artifact.Name)
+	installPath := filepath.Join(targetBase, "hooks", h.metadata.Asset.Name)
 	if err := os.RemoveAll(installPath); err != nil {
 		return fmt.Errorf("failed to remove hook directory: %w", err)
 	}
@@ -68,7 +68,7 @@ func (h *HookHandler) Remove(ctx context.Context, targetBase string) error {
 	return nil
 }
 
-// Validate checks if the zip structure is valid for a hook artifact
+// Validate checks if the zip structure is valid for a hook asset
 func (h *HookHandler) Validate(zipData []byte) error {
 	files, err := utils.ListZipFiles(zipData)
 	if err != nil {
@@ -111,10 +111,10 @@ func (h *HookHandler) updateHooksJSON(targetBase string) error {
 	}
 
 	// Build entry with absolute path to script
-	scriptPath := filepath.Join(targetBase, "hooks", h.metadata.Artifact.Name, h.metadata.Hook.ScriptFile)
+	scriptPath := filepath.Join(targetBase, "hooks", h.metadata.Asset.Name, h.metadata.Hook.ScriptFile)
 	entry := map[string]interface{}{
 		"command":   scriptPath,
-		"_artifact": h.metadata.Artifact.Name,
+		"_artifact": h.metadata.Asset.Name,
 	}
 
 	// Add to hooks array
@@ -122,10 +122,10 @@ func (h *HookHandler) updateHooksJSON(targetBase string) error {
 		config.Hooks[cursorEvent] = []map[string]interface{}{}
 	}
 
-	// Remove existing entry for this artifact (if any)
+	// Remove existing entry for this asset (if any)
 	filtered := []map[string]interface{}{}
 	for _, hook := range config.Hooks[cursorEvent] {
-		if artifact, ok := hook["_artifact"].(string); !ok || artifact != h.metadata.Artifact.Name {
+		if assetName, ok := hook["_artifact"].(string); !ok || assetName != h.metadata.Asset.Name {
 			filtered = append(filtered, hook)
 		}
 	}
@@ -152,7 +152,7 @@ func (h *HookHandler) removeFromHooksJSON(targetBase string) error {
 	for eventName, hooks := range config.Hooks {
 		filtered := []map[string]interface{}{}
 		for _, hook := range hooks {
-			if artifact, ok := hook["_artifact"].(string); !ok || artifact != h.metadata.Artifact.Name {
+			if assetName, ok := hook["_artifact"].(string); !ok || assetName != h.metadata.Asset.Name {
 				filtered = append(filtered, hook)
 			}
 		}
@@ -231,5 +231,5 @@ func containsFile(files []string, name string) bool {
 
 // VerifyInstalled checks if the hook is properly installed
 func (h *HookHandler) VerifyInstalled(targetBase string) (bool, string) {
-	return hookOps.VerifyInstalled(targetBase, h.metadata.Artifact.Name, h.metadata.Artifact.Version)
+	return hookOps.VerifyInstalled(targetBase, h.metadata.Asset.Name, h.metadata.Asset.Version)
 }

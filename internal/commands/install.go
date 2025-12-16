@@ -21,9 +21,9 @@ import (
 	"github.com/sleuth-io/skills/internal/lockfile"
 	"github.com/sleuth-io/skills/internal/logger"
 	"github.com/sleuth-io/skills/internal/scope"
-	vaultpkg "github.com/sleuth-io/skills/internal/vault"
 	"github.com/sleuth-io/skills/internal/ui"
 	"github.com/sleuth-io/skills/internal/ui/components"
+	vaultpkg "github.com/sleuth-io/skills/internal/vault"
 )
 
 // NewInstallCommand creates the install command
@@ -213,35 +213,35 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 		}
 	}
 
-	// Filter artifacts by client compatibility and scope
-	var applicableArtifacts []*lockfile.Artifact
-	for i := range lockFile.Artifacts {
-		artifact := &lockFile.Artifacts[i]
+	// Filter assets by client compatibility and scope
+	var applicableAssets []*lockfile.Asset
+	for i := range lockFile.Assets {
+		asset := &lockFile.Assets[i]
 
-		// Check if ANY target client supports this artifact AND matches scope
+		// Check if ANY target client supports this asset AND matches scope
 		supported := false
 		for _, client := range targetClients {
-			if artifact.MatchesClient(client.ID()) &&
-				client.SupportsArtifactType(artifact.Type) &&
-				matcherScope.MatchesArtifact(artifact) {
+			if asset.MatchesClient(client.ID()) &&
+				client.SupportsAssetType(asset.Type) &&
+				matcherScope.MatchesAsset(asset) {
 				supported = true
 				break
 			}
 		}
 
 		if supported {
-			applicableArtifacts = append(applicableArtifacts, artifact)
+			applicableAssets = append(applicableAssets, asset)
 		}
 	}
 
-	if len(applicableArtifacts) == 0 {
-		styledOut.Muted("No artifacts to install.")
+	if len(applicableAssets) == 0 {
+		styledOut.Muted("No assets to install.")
 		return nil
 	}
 
 	// Resolve dependencies
 	resolver := assets.NewDependencyResolver(lockFile)
-	sortedArtifacts, err := resolver.Resolve(applicableArtifacts)
+	sortedAssets, err := resolver.Resolve(applicableAssets)
 	if err != nil {
 		return fmt.Errorf("dependency resolution failed: %w", err)
 	}
@@ -249,38 +249,38 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	// Load tracker
 	tracker := loadTracker(out)
 
-	// Determine which artifacts need to be installed (new or changed versions or missing from clients)
+	// Determine which assets need to be installed (new or changed versions or missing from clients)
 	targetClientIDs := make([]string, len(targetClients))
 	for i, client := range targetClients {
 		targetClientIDs[i] = client.ID()
 	}
 
-	// In repair mode, verify artifacts against filesystem and update tracker
+	// In repair mode, verify assets against filesystem and update tracker
 	if repairMode {
-		repairTracker(ctx, tracker, sortedArtifacts, targetClients, gitContext, currentScope, out)
+		repairTracker(ctx, tracker, sortedAssets, targetClients, gitContext, currentScope, out)
 	}
 
-	artifactsToInstall := determineArtifactsToInstall(tracker, sortedArtifacts, currentScope, targetClientIDs, out)
+	assetsToInstall := determineAssetsToInstall(tracker, sortedAssets, currentScope, targetClientIDs, out)
 
-	// Clean up artifacts that were removed from lock file
-	cleanupRemovedArtifacts(ctx, tracker, sortedArtifacts, gitContext, currentScope, targetClients, out)
+	// Clean up assets that were removed from lock file
+	cleanupRemovedAssets(ctx, tracker, sortedAssets, gitContext, currentScope, targetClients, out)
 
 	// Early exit if nothing to install
-	if len(artifactsToInstall) == 0 {
+	if len(assetsToInstall) == 0 {
 		// Save state even if nothing changed
-		saveInstallationState(tracker, sortedArtifacts, currentScope, targetClientIDs, out)
+		saveInstallationState(tracker, sortedAssets, currentScope, targetClientIDs, out)
 
 		// Install client-specific hooks (e.g., auto-update, usage tracking)
 		installClientHooks(ctx, targetClients, out)
 
-		// Ensure skills support is configured for all clients (creates local rules files, etc.)
-		// This is important even when no new artifacts are installed, as the local rules file
-		// may not exist yet (e.g., running in a new repo with only global skills)
-		ensureSkillsSupport(ctx, targetClients, buildInstallScope(currentScope, gitContext), out)
+		// Ensure asset support is configured for all clients (creates local rules files, etc.)
+		// This is important even when no new assets are installed, as the local rules file
+		// may not exist yet (e.g., running in a new repo with only global assets)
+		ensureAssetSupport(ctx, targetClients, buildInstallScope(currentScope, gitContext), out)
 
 		// Log summary
 		log := logger.Get()
-		log.Info("install completed", "installed", 0, "total_up_to_date", len(sortedArtifacts))
+		log.Info("install completed", "installed", 0, "total_up_to_date", len(sortedAssets))
 
 		// In hook mode, output JSON even when nothing changed
 		if hookMode {
@@ -299,23 +299,23 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 		return nil
 	}
 
-	// Download only the artifacts that need to be installed
-	status.Start(fmt.Sprintf("Downloading %d assets", len(artifactsToInstall)))
-	fetcher := assets.NewArtifactFetcher(vault)
-	results, err := fetcher.FetchArtifacts(ctx, artifactsToInstall, 10)
+	// Download only the assets that need to be installed
+	status.Start(fmt.Sprintf("Downloading %d assets", len(assetsToInstall)))
+	fetcher := assets.NewAssetFetcher(vault)
+	results, err := fetcher.FetchAssets(ctx, assetsToInstall, 10)
 	if err != nil {
-		return fmt.Errorf("failed to fetch artifacts: %w", err)
+		return fmt.Errorf("failed to fetch assets: %w", err)
 	}
 
 	// Check for download errors
 	var downloadErrors []error
-	var successfulDownloads []*assets.ArtifactWithMetadata
+	var successfulDownloads []*assets.AssetWithMetadata
 	for _, result := range results {
 		if result.Error != nil {
-			downloadErrors = append(downloadErrors, fmt.Errorf("%s: %w", result.Artifact.Name, result.Error))
+			downloadErrors = append(downloadErrors, fmt.Errorf("%s: %w", result.Asset.Name, result.Error))
 		} else {
-			successfulDownloads = append(successfulDownloads, &assets.ArtifactWithMetadata{
-				Artifact: result.Artifact,
+			successfulDownloads = append(successfulDownloads, &assets.AssetWithMetadata{
+				Asset:    result.Asset,
 				Metadata: result.Metadata,
 				ZipData:  result.ZipData,
 			})
@@ -328,7 +328,7 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 		log := logger.Get()
 		for _, err := range downloadErrors {
 			styledOut.ErrorItem(err.Error())
-			log.Error("artifact download failed", "error", err)
+			log.Error("asset download failed", "error", err)
 		}
 	}
 
@@ -337,24 +337,24 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 		return fmt.Errorf("no assets downloaded successfully")
 	}
 
-	// Install artifacts to their appropriate locations
-	installResult := installArtifacts(ctx, successfulDownloads, gitContext, currentScope, targetClients, out)
+	// Install assets to their appropriate locations
+	installResult := installAssets(ctx, successfulDownloads, gitContext, currentScope, targetClients, out)
 
-	// Save new installation state (saves ALL artifacts from lock file, not just changed ones)
-	saveInstallationState(tracker, sortedArtifacts, currentScope, targetClientIDs, out)
+	// Save new installation state (saves ALL assets from lock file, not just changed ones)
+	saveInstallationState(tracker, sortedAssets, currentScope, targetClientIDs, out)
 
 	// Ensure skills support is configured for all clients (creates local rules files, etc.)
-	ensureSkillsSupport(ctx, targetClients, buildInstallScope(currentScope, gitContext), out)
+	ensureAssetSupport(ctx, targetClients, buildInstallScope(currentScope, gitContext), out)
 
 	// Report results - clean summary
 	if len(installResult.Installed) > 0 {
 		styledOut.Success(fmt.Sprintf("Installed %d assets", len(installResult.Installed)))
 		for _, name := range installResult.Installed {
 			styledOut.SuccessItem(name)
-			// Log version for this artifact
+			// Log version for this asset
 			for _, art := range successfulDownloads {
-				if art.Artifact.Name == name {
-					log.Info("artifact installed", "name", name, "version", art.Artifact.Version, "type", art.Metadata.Artifact.Type, "scope", currentScope.Type)
+				if art.Asset.Name == name {
+					log.Info("asset installed", "name", name, "version", art.Asset.Version, "type", art.Metadata.Asset.Type, "scope", currentScope.Type)
 					break
 				}
 			}
@@ -365,7 +365,7 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 		styledOut.Error(fmt.Sprintf("Failed to install %d assets", len(installResult.Failed)))
 		for i, name := range installResult.Failed {
 			styledOut.ErrorItem(fmt.Sprintf("%s: %v", name, installResult.Errors[i]))
-			log.Error("artifact installation failed", "name", name, "error", installResult.Errors[i])
+			log.Error("asset installation failed", "name", name, "error", installResult.Errors[i])
 		}
 		return fmt.Errorf("some assets failed to install")
 	}
@@ -376,20 +376,20 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	// Log summary
 	log.Info("install completed", "installed", len(installResult.Installed), "failed", len(installResult.Failed))
 
-	// If in hook mode and artifacts were installed, output JSON message
+	// If in hook mode and assets were installed, output JSON message
 	if hookMode && len(installResult.Installed) > 0 {
-		// Build artifact list message with type info
-		type artifactInfo struct {
+		// Build asset list message with type info
+		type assetInfo struct {
 			name string
 			typ  string
 		}
-		var artifacts []artifactInfo
+		var installedAssets []assetInfo
 		for _, name := range installResult.Installed {
 			for _, art := range successfulDownloads {
-				if art.Artifact.Name == name {
-					artifacts = append(artifacts, artifactInfo{
+				if art.Asset.Name == name {
+					installedAssets = append(installedAssets, assetInfo{
 						name: name,
-						typ:  strings.ToLower(art.Metadata.Artifact.Type.Label),
+						typ:  strings.ToLower(art.Metadata.Asset.Type.Label),
 					})
 					break
 				}
@@ -406,24 +406,24 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 		)
 
 		var message string
-		if len(artifacts) == 1 {
-			// Single artifact - more compact message
+		if len(installedAssets) == 1 {
+			// Single asset - more compact message
 			message = fmt.Sprintf("%ssx%s installed the %s%s %s%s. %sRestart Claude Code to use it.%s",
-				bold, resetBold, blue, artifacts[0].name, artifacts[0].typ, reset, red, reset)
-		} else if len(artifacts) <= 3 {
+				bold, resetBold, blue, installedAssets[0].name, installedAssets[0].typ, reset, red, reset)
+		} else if len(installedAssets) <= 3 {
 			// List all items
 			message = fmt.Sprintf("%ssx%s installed:\n", bold, resetBold)
-			for _, art := range artifacts {
-				message += fmt.Sprintf("- The %s%s %s%s\n", blue, art.name, art.typ, reset)
+			for _, asset := range installedAssets {
+				message += fmt.Sprintf("- The %s%s %s%s\n", blue, asset.name, asset.typ, reset)
 			}
 			message += fmt.Sprintf("\n%sRestart Claude Code to use them.%s", red, reset)
 		} else {
 			// Show first 3 and count remaining
 			message = fmt.Sprintf("%ssx%s installed:\n", bold, resetBold)
 			for i := 0; i < 3; i++ {
-				message += fmt.Sprintf("- The %s%s %s%s\n", blue, artifacts[i].name, artifacts[i].typ, reset)
+				message += fmt.Sprintf("- The %s%s %s%s\n", blue, installedAssets[i].name, installedAssets[i].typ, reset)
 			}
-			remaining := len(artifacts) - 3
+			remaining := len(installedAssets) - 3
 			message += fmt.Sprintf("and %d more\n\n%sRestart Claude Code to use them.%s", remaining, red, reset)
 		}
 
@@ -450,71 +450,71 @@ func loadTracker(out *outputHelper) *assets.Tracker {
 		log := logger.Get()
 		log.Error("failed to load tracker", "error", err)
 		return &assets.Tracker{
-			Version:   assets.TrackerFormatVersion,
-			Artifacts: []assets.InstalledArtifact{},
+			Version: assets.TrackerFormatVersion,
+			Assets:  []assets.InstalledAsset{},
 		}
 	}
 	return tracker
 }
 
-// determineArtifactsToInstall finds which artifacts need to be installed (new or changed)
-func determineArtifactsToInstall(tracker *assets.Tracker, sortedArtifacts []*lockfile.Artifact, currentScope *scope.Scope, targetClientIDs []string, out *outputHelper) []*lockfile.Artifact {
+// determineAssetsToInstall finds which assets need to be installed (new or changed)
+func determineAssetsToInstall(tracker *assets.Tracker, sortedAssets []*lockfile.Asset, currentScope *scope.Scope, targetClientIDs []string, out *outputHelper) []*lockfile.Asset {
 	log := logger.Get()
 
-	var artifactsToInstall []*lockfile.Artifact
-	for _, art := range sortedArtifacts {
-		key := artifactKeyForInstall(art, currentScope)
+	var assetsToInstall []*lockfile.Asset
+	for _, art := range sortedAssets {
+		key := assetKeyForInstall(art, currentScope)
 		if tracker.NeedsInstall(key, art.Version, targetClientIDs) {
 			// Check for version updates and log them
-			if existing := tracker.FindArtifact(key); existing != nil && existing.Version != art.Version {
-				log.Info("artifact version update", "name", art.Name, "old_version", existing.Version, "new_version", art.Version)
+			if existing := tracker.FindAsset(key); existing != nil && existing.Version != art.Version {
+				log.Info("asset version update", "name", art.Name, "old_version", existing.Version, "new_version", art.Version)
 			}
-			artifactsToInstall = append(artifactsToInstall, art)
+			assetsToInstall = append(assetsToInstall, art)
 		}
 	}
 
-	return artifactsToInstall
+	return assetsToInstall
 }
 
-// artifactKeyForInstall returns the correct artifact key based on whether the artifact is global or scoped
-func artifactKeyForInstall(art *lockfile.Artifact, currentScope *scope.Scope) assets.ArtifactKey {
-	if art.IsGlobal() {
-		return assets.NewArtifactKey(art.Name, scope.TypeGlobal, "", "")
+// assetKeyForInstall returns the correct asset key based on whether the asset is global or scoped
+func assetKeyForInstall(asset *lockfile.Asset, currentScope *scope.Scope) assets.AssetKey {
+	if asset.IsGlobal() {
+		return assets.NewAssetKey(asset.Name, scope.TypeGlobal, "", "")
 	}
-	return assets.NewArtifactKey(art.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+	return assets.NewAssetKey(asset.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
 }
 
-// cleanupRemovedArtifacts removes artifacts that are no longer in the lock file from all clients
-func cleanupRemovedArtifacts(ctx context.Context, tracker *assets.Tracker, sortedArtifacts []*lockfile.Artifact, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) {
-	// Find artifacts in tracker for this scope that are no longer in lock file
-	key := assets.NewArtifactKey("", currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+// cleanupRemovedAssets removes assets that are no longer in the lock file from all clients
+func cleanupRemovedAssets(ctx context.Context, tracker *assets.Tracker, sortedAssets []*lockfile.Asset, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) {
+	// Find assets in tracker for this scope that are no longer in lock file
+	key := assets.NewAssetKey("", currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
 	currentInScope := tracker.FindByScope(key.Repository, key.Path)
 
 	lockFileNames := make(map[string]bool)
-	for _, art := range sortedArtifacts {
+	for _, art := range sortedAssets {
 		lockFileNames[art.Name] = true
 	}
 
-	var removedArtifacts []assets.InstalledArtifact
+	var removedAssets []assets.InstalledAsset
 	for _, installed := range currentInScope {
 		if !lockFileNames[installed.Name] {
-			removedArtifacts = append(removedArtifacts, installed)
+			removedAssets = append(removedAssets, installed)
 		}
 	}
 
-	if len(removedArtifacts) == 0 {
+	if len(removedAssets) == 0 {
 		return
 	}
 
-	out.printf("\nCleaning up %d removed asset(s)...\n", len(removedArtifacts))
+	out.printf("\nCleaning up %d removed asset(s)...\n", len(removedAssets))
 
 	// Build uninstall scope
 	uninstallScope := buildInstallScope(currentScope, gitContext)
 
-	// Convert InstalledArtifact to asset.Asset for uninstall
-	artifactsToRemove := make([]asset.Asset, len(removedArtifacts))
-	for i, installed := range removedArtifacts {
-		artifactsToRemove[i] = asset.Asset{
+	// Convert InstalledAsset to asset.Asset for uninstall
+	assetsToRemove := make([]asset.Asset, len(removedAssets))
+	for i, installed := range removedAssets {
+		assetsToRemove[i] = asset.Asset{
 			Name:    installed.Name,
 			Version: installed.Version,
 			Type:    asset.FromString(installed.Type),
@@ -523,15 +523,15 @@ func cleanupRemovedArtifacts(ctx context.Context, tracker *assets.Tracker, sorte
 
 	// Create uninstall request
 	uninstallReq := clients.UninstallRequest{
-		Artifacts: artifactsToRemove,
-		Scope:     uninstallScope,
-		Options:   clients.UninstallOptions{},
+		Assets:  assetsToRemove,
+		Scope:   uninstallScope,
+		Options: clients.UninstallOptions{},
 	}
 
 	// Uninstall from all clients
 	log := logger.Get()
 	for _, client := range targetClients {
-		resp, err := client.UninstallArtifacts(ctx, uninstallReq)
+		resp, err := client.UninstallAssets(ctx, uninstallReq)
 		if err != nil {
 			out.printfErr("Warning: cleanup failed for %s: %v\n", client.DisplayName(), err)
 			log.Error("cleanup failed", "client", client.ID(), "error", err)
@@ -540,61 +540,61 @@ func cleanupRemovedArtifacts(ctx context.Context, tracker *assets.Tracker, sorte
 
 		for _, result := range resp.Results {
 			if result.Status == clients.StatusSuccess {
-				out.printf("  - Removed %s from %s\n", result.ArtifactName, client.DisplayName())
-				log.Info("artifact removed", "name", result.ArtifactName, "client", client.ID())
+				out.printf("  - Removed %s from %s\n", result.AssetName, client.DisplayName())
+				log.Info("asset removed", "name", result.AssetName, "client", client.ID())
 			} else if result.Status == clients.StatusFailed {
-				out.printfErr("Warning: failed to remove %s from %s: %v\n", result.ArtifactName, client.DisplayName(), result.Error)
-				log.Error("artifact removal failed", "name", result.ArtifactName, "client", client.ID(), "error", result.Error)
+				out.printfErr("Warning: failed to remove %s from %s: %v\n", result.AssetName, client.DisplayName(), result.Error)
+				log.Error("asset removal failed", "name", result.AssetName, "client", client.ID(), "error", result.Error)
 			}
 		}
 	}
 
 	// Remove from tracker
-	for _, removed := range removedArtifacts {
-		tracker.RemoveArtifact(removed.Key())
+	for _, removed := range removedAssets {
+		tracker.RemoveAsset(removed.Key())
 	}
 }
 
-// repairTracker verifies artifacts against the filesystem and updates the tracker to match reality
+// repairTracker verifies assets against the filesystem and updates the tracker to match reality
 // This is called when --repair flag is used to fix discrepancies between tracker and actual installation
-func repairTracker(ctx context.Context, tracker *assets.Tracker, sortedArtifacts []*lockfile.Artifact, targetClients []clients.Client, gitContext *gitutil.GitContext, currentScope *scope.Scope, out *outputHelper) {
+func repairTracker(ctx context.Context, tracker *assets.Tracker, sortedAssets []*lockfile.Asset, targetClients []clients.Client, gitContext *gitutil.GitContext, currentScope *scope.Scope, out *outputHelper) {
 	log := logger.Get()
 	out.println("Repair mode: verifying installed assets...")
 
-	// Track which artifacts are missing for each client
+	// Track which assets are missing for each client
 	var totalMissing int
 	var totalOutdated int
 
 	// First, check for version mismatches in the tracker and remove outdated entries
-	for _, art := range sortedArtifacts {
-		key := artifactKeyForInstall(art, currentScope)
-		existing := tracker.FindArtifact(key)
+	for _, art := range sortedAssets {
+		key := assetKeyForInstall(art, currentScope)
+		existing := tracker.FindAsset(key)
 		if existing != nil && existing.Version != art.Version {
 			out.printf("  ↻ %s version mismatch (tracker: %s, lock file: %s)\n", art.Name, existing.Version, art.Version)
-			log.Info("artifact version mismatch", "name", art.Name, "tracker_version", existing.Version, "lock_version", art.Version)
+			log.Info("asset version mismatch", "name", art.Name, "tracker_version", existing.Version, "lock_version", art.Version)
 			// Remove from tracker so it will be reinstalled with correct version
-			tracker.RemoveArtifact(key)
+			tracker.RemoveAsset(key)
 			totalOutdated++
 		}
 	}
 
-	// Verify each artifact at its proper install location (based on artifact's scope)
-	for _, art := range sortedArtifacts {
-		// Get the proper scope for this artifact
-		artScope := buildInstallScopeForArtifact(art, gitContext)
+	// Verify each asset at its proper install location (based on asset's scope)
+	for _, art := range sortedAssets {
+		// Get the proper scope for this asset
+		artScope := buildInstallScopeForAsset(art, gitContext)
 
 		for _, client := range targetClients {
-			// Verify this single artifact at its proper location
-			results := client.VerifyArtifacts(ctx, []*lockfile.Artifact{art}, artScope)
+			// Verify this single asset at its proper location
+			results := client.VerifyAssets(ctx, []*lockfile.Asset{art}, artScope)
 
 			for _, result := range results {
 				if !result.Installed {
-					out.printf("  ✗ %s not installed for %s: %s\n", result.Artifact.Name, client.DisplayName(), result.Message)
-					log.Info("artifact verification failed", "name", result.Artifact.Name, "client", client.ID(), "reason", result.Message)
+					out.printf("  ✗ %s not installed for %s: %s\n", result.Asset.Name, client.DisplayName(), result.Message)
+					log.Info("asset verification failed", "name", result.Asset.Name, "client", client.ID(), "reason", result.Message)
 
-					// Remove this client from the artifact's tracker entry
-					key := artifactKeyForInstall(result.Artifact, currentScope)
-					existing := tracker.FindArtifact(key)
+					// Remove this client from the asset's tracker entry
+					key := assetKeyForInstall(result.Asset, currentScope)
+					existing := tracker.FindAsset(key)
 					if existing != nil {
 						// Remove this client from the list
 						var updatedClients []string
@@ -606,10 +606,10 @@ func repairTracker(ctx context.Context, tracker *assets.Tracker, sortedArtifacts
 
 						if len(updatedClients) == 0 {
 							// No clients left, remove entirely
-							tracker.RemoveArtifact(key)
+							tracker.RemoveAsset(key)
 						} else {
 							existing.Clients = updatedClients
-							tracker.UpsertArtifact(*existing)
+							tracker.UpsertAsset(*existing)
 						}
 					}
 					totalMissing++
@@ -631,26 +631,26 @@ func repairTracker(ctx context.Context, tracker *assets.Tracker, sortedArtifacts
 	out.println()
 }
 
-// installArtifacts installs artifacts to all detected clients using the orchestrator
-func installArtifacts(ctx context.Context, successfulDownloads []*assets.ArtifactWithMetadata, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) *assets.InstallResult {
+// installAssets installs assets to all detected clients using the orchestrator
+func installAssets(ctx context.Context, successfulDownloads []*assets.AssetWithMetadata, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) *assets.InstallResult {
 	out.println("Installing assets...")
 
-	// Install each artifact to its proper scope
-	// Global artifacts go to ~/.claude, repo-scoped artifacts go to {repoRoot}/.claude
+	// Install each asset to its proper scope
+	// Global assets go to ~/.claude, repo-scoped assets go to {repoRoot}/.claude
 	allResults := make(map[string]clients.InstallResponse)
 
 	for _, download := range successfulDownloads {
-		bundle := &clients.ArtifactBundle{
-			Artifact: download.Artifact,
+		bundle := &clients.AssetBundle{
+			Asset:    download.Asset,
 			Metadata: download.Metadata,
 			ZipData:  download.ZipData,
 		}
 
-		// Determine installation scope based on the ARTIFACT's scope, not current directory
-		installScope := buildInstallScopeForArtifact(download.Artifact, gitContext)
+		// Determine installation scope based on the ASSET's scope, not current directory
+		installScope := buildInstallScopeForAsset(download.Asset, gitContext)
 
-		// Run installation for this artifact
-		results := runMultiClientInstallation(ctx, []*clients.ArtifactBundle{bundle}, installScope, targetClients)
+		// Run installation for this asset
+		results := runMultiClientInstallation(ctx, []*clients.AssetBundle{bundle}, installScope, targetClients)
 
 		// Merge results
 		for clientID, resp := range results {
@@ -682,17 +682,17 @@ func buildInstallScope(currentScope *scope.Scope, gitContext *gitutil.GitContext
 	return installScope
 }
 
-// buildInstallScopeForArtifact creates the installation scope based on the artifact's own scope
-// Global artifacts go to ~/.claude, repo-scoped artifacts go to {repoRoot}/.claude
-func buildInstallScopeForArtifact(art *lockfile.Artifact, gitContext *gitutil.GitContext) *clients.InstallScope {
+// buildInstallScopeForAsset creates the installation scope based on the asset's own scope
+// Global assets go to ~/.claude, repo-scoped assets go to {repoRoot}/.claude
+func buildInstallScopeForAsset(art *lockfile.Asset, gitContext *gitutil.GitContext) *clients.InstallScope {
 	if art.IsGlobal() {
-		// Global artifact - install to ~/.claude
+		// Global asset - install to ~/.claude
 		return &clients.InstallScope{
 			Type: clients.ScopeGlobal,
 		}
 	}
 
-	// Repo or path-scoped artifact - install to repo's .claude directory
+	// Repo or path-scoped asset - install to repo's .claude directory
 	installScope := &clients.InstallScope{
 		Type: clients.ScopeRepository,
 	}
@@ -702,13 +702,13 @@ func buildInstallScopeForArtifact(art *lockfile.Artifact, gitContext *gitutil.Gi
 		installScope.RepoURL = gitContext.RepoURL
 	}
 
-	// For path-scoped artifacts, we'd need to handle the path too
+	// For path-scoped assets, we'd need to handle the path too
 	// but for now we install to repo root
 	return installScope
 }
 
 // runMultiClientInstallation executes installation across all clients concurrently
-func runMultiClientInstallation(ctx context.Context, bundles []*clients.ArtifactBundle, installScope *clients.InstallScope, targetClients []clients.Client) map[string]clients.InstallResponse {
+func runMultiClientInstallation(ctx context.Context, bundles []*clients.AssetBundle, installScope *clients.InstallScope, targetClients []clients.Client) map[string]clients.InstallResponse {
 	orchestrator := clients.NewOrchestrator(clients.Global())
 	return orchestrator.InstallToClients(ctx, bundles, installScope, clients.InstallOptions{}, targetClients)
 }
@@ -721,7 +721,7 @@ func processInstallationResults(allResults map[string]clients.InstallResponse, o
 		Errors:    []error{},
 	}
 
-	installedArtifacts := make(map[string]bool)
+	successfullyInstalled := make(map[string]bool)
 
 	for clientID, resp := range allResults {
 		client, _ := clients.Global().Get(clientID)
@@ -729,20 +729,20 @@ func processInstallationResults(allResults map[string]clients.InstallResponse, o
 		for _, result := range resp.Results {
 			switch result.Status {
 			case clients.StatusSuccess:
-				out.printf("  ✓ %s → %s\n", result.ArtifactName, client.DisplayName())
-				installedArtifacts[result.ArtifactName] = true
+				out.printf("  ✓ %s → %s\n", result.AssetName, client.DisplayName())
+				successfullyInstalled[result.AssetName] = true
 			case clients.StatusFailed:
-				out.printfErr("  ✗ %s → %s: %v\n", result.ArtifactName, client.DisplayName(), result.Error)
-				installResult.Failed = append(installResult.Failed, result.ArtifactName)
+				out.printfErr("  ✗ %s → %s: %v\n", result.AssetName, client.DisplayName(), result.Error)
+				installResult.Failed = append(installResult.Failed, result.AssetName)
 				installResult.Errors = append(installResult.Errors, result.Error)
 			case clients.StatusSkipped:
-				// Don't print skipped artifacts
+				// Don't print skipped assets
 			}
 		}
 	}
 
-	// Build list of successfully installed artifacts
-	for name := range installedArtifacts {
+	// Build list of successfully installed assets
+	for name := range successfullyInstalled {
 		installResult.Installed = append(installResult.Installed, name)
 	}
 
@@ -766,22 +766,22 @@ func installClientHooks(ctx context.Context, targetClients []clients.Client, out
 	}
 }
 
-// ensureSkillsSupport calls EnsureSkillsSupport on all clients to set up local rules files, etc.
-func ensureSkillsSupport(ctx context.Context, targetClients []clients.Client, scope *clients.InstallScope, out *outputHelper) {
+// ensureAssetSupport calls EnsureAssetSupport on all clients to set up local rules files, etc.
+func ensureAssetSupport(ctx context.Context, targetClients []clients.Client, scope *clients.InstallScope, out *outputHelper) {
 	log := logger.Get()
 	for _, client := range targetClients {
-		if err := client.EnsureSkillsSupport(ctx, scope); err != nil {
-			out.printfErr("Warning: failed to ensure skills support for %s: %v\n", client.DisplayName(), err)
-			log.Error("failed to ensure skills support", "client", client.ID(), "error", err)
+		if err := client.EnsureAssetSupport(ctx, scope); err != nil {
+			out.printfErr("Warning: failed to ensure asset support for %s: %v\n", client.DisplayName(), err)
+			log.Error("failed to ensure asset support", "client", client.ID(), "error", err)
 		}
 	}
 }
 
 // saveInstallationState saves the current installation state to tracker file
-func saveInstallationState(tracker *assets.Tracker, sortedArtifacts []*lockfile.Artifact, currentScope *scope.Scope, targetClientIDs []string, out *outputHelper) {
-	for _, art := range sortedArtifacts {
-		key := artifactKeyForInstall(art, currentScope)
-		tracker.UpsertArtifact(assets.InstalledArtifact{
+func saveInstallationState(tracker *assets.Tracker, sortedAssets []*lockfile.Asset, currentScope *scope.Scope, targetClientIDs []string, out *outputHelper) {
+	for _, art := range sortedAssets {
+		key := assetKeyForInstall(art, currentScope)
+		tracker.UpsertAsset(assets.InstalledAsset{
 			Name:       art.Name,
 			Version:    art.Version,
 			Type:       art.Type.Key,

@@ -13,7 +13,7 @@ import (
 	"github.com/sleuth-io/skills/internal/utils"
 )
 
-// GitSourceHandler handles artifacts with source-git
+// GitSourceHandler handles assets with source-git
 type GitSourceHandler struct {
 	gitClient *git.Client
 }
@@ -25,13 +25,13 @@ func NewGitSourceHandler(gitClient *git.Client) *GitSourceHandler {
 	}
 }
 
-// Fetch clones/fetches a git repository and retrieves the artifact
-func (g *GitSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifact) ([]byte, error) {
-	if artifact.SourceGit == nil {
-		return nil, fmt.Errorf("artifact does not have source-git")
+// Fetch clones/fetches a git repository and retrieves the asset
+func (g *GitSourceHandler) Fetch(ctx context.Context, asset *lockfile.Asset) ([]byte, error) {
+	if asset.SourceGit == nil {
+		return nil, fmt.Errorf("asset does not have source-git")
 	}
 
-	source := artifact.SourceGit
+	source := asset.SourceGit
 
 	// Get cache path for this repository
 	repoCache, err := cache.GetGitRepoCachePath(source.URL)
@@ -49,7 +49,7 @@ func (g *GitSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifac
 		return nil, fmt.Errorf("failed to checkout ref %s: %w", source.Ref, err)
 	}
 
-	// Determine the directory to look for the artifact
+	// Determine the directory to look for the asset
 	searchDir := repoCache
 	if source.Subdirectory != "" {
 		searchDir = filepath.Join(repoCache, source.Subdirectory)
@@ -72,7 +72,7 @@ func (g *GitSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifac
 		} else {
 			for _, f := range zipFiles {
 				base := filepath.Base(f)
-				if strings.HasPrefix(base, artifact.Name) {
+				if strings.HasPrefix(base, asset.Name) {
 					zipFile = f
 					break
 				}
@@ -97,10 +97,10 @@ func (g *GitSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifac
 	}
 
 	// No zip files found - check if this is an exploded directory
-	// Look for metadata.toml to confirm it's an artifact directory
+	// Look for metadata.toml to confirm it's an asset directory
 	metadataPath := filepath.Join(searchDir, "metadata.toml")
 	if utils.FileExists(metadataPath) {
-		// This is an exploded artifact directory - create a zip from it
+		// This is an exploded asset directory - create a zip from it
 		data, err := utils.CreateZip(searchDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create zip from directory: %w", err)
@@ -108,7 +108,7 @@ func (g *GitSourceHandler) Fetch(ctx context.Context, artifact *lockfile.Artifac
 		return data, nil
 	}
 
-	return nil, fmt.Errorf("no zip files or exploded artifact directory found in %s", searchDir)
+	return nil, fmt.Errorf("no zip files or exploded asset directory found in %s", searchDir)
 }
 
 // cloneOrUpdate clones the repository if it doesn't exist, or fetches updates if it does

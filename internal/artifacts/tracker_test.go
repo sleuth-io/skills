@@ -3,6 +3,8 @@ package artifacts
 import (
 	"strings"
 	"testing"
+
+	"github.com/sleuth-io/skills/internal/lockfile"
 )
 
 func TestGetTrackerPath(t *testing.T) {
@@ -147,11 +149,120 @@ func TestTrackerOperations(t *testing.T) {
 	}
 }
 
+func TestFindArtifactWithMatcher(t *testing.T) {
+	tracker := &Tracker{
+		Version: TrackerFormatVersion,
+		Artifacts: []InstalledArtifact{
+			{
+				Name:       "global-skill",
+				Version:    "1.0.0",
+				Repository: "",
+				Path:       "",
+				Clients:    []string{"claude-code"},
+			},
+			{
+				Name:       "repo-skill",
+				Version:    "2.0.0",
+				Repository: "git@github.com:org/repo.git",
+				Path:       "",
+				Clients:    []string{"cursor"},
+			},
+			{
+				Name:       "path-skill",
+				Version:    "3.0.0",
+				Repository: "git@github.com:org/repo.git",
+				Path:       "/services/api",
+				Clients:    []string{"claude-code"},
+			},
+		},
+	}
+
+	// Matcher that normalizes SSH and HTTPS URLs
+	matchRepo := func(a, b string) bool {
+		// Simple normalization for test
+		normalize := func(url string) string {
+			url = strings.TrimSuffix(url, ".git")
+			url = strings.Replace(url, "git@github.com:", "github.com/", 1)
+			url = strings.Replace(url, "https://github.com/", "github.com/", 1)
+			return url
+		}
+		return normalize(a) == normalize(b)
+	}
+
+	tests := []struct {
+		name     string
+		artName  string
+		repoURL  string
+		path     string
+		wantName string
+	}{
+		{
+			name:     "find global artifact",
+			artName:  "global-skill",
+			repoURL:  "",
+			path:     "",
+			wantName: "global-skill",
+		},
+		{
+			name:     "find repo artifact with same URL format",
+			artName:  "repo-skill",
+			repoURL:  "git@github.com:org/repo.git",
+			path:     "",
+			wantName: "repo-skill",
+		},
+		{
+			name:     "find repo artifact with different URL format (HTTPS)",
+			artName:  "repo-skill",
+			repoURL:  "https://github.com/org/repo",
+			path:     "",
+			wantName: "repo-skill",
+		},
+		{
+			name:     "find path artifact with different URL format",
+			artName:  "path-skill",
+			repoURL:  "https://github.com/org/repo.git",
+			path:     "/services/api",
+			wantName: "path-skill",
+		},
+		{
+			name:     "not found - wrong path",
+			artName:  "path-skill",
+			repoURL:  "https://github.com/org/repo",
+			path:     "/wrong/path",
+			wantName: "",
+		},
+		{
+			name:     "not found - wrong name",
+			artName:  "nonexistent",
+			repoURL:  "",
+			path:     "",
+			wantName: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tracker.FindArtifactWithMatcher(tt.artName, tt.repoURL, tt.path, matchRepo)
+			if tt.wantName == "" {
+				if got != nil {
+					t.Errorf("FindArtifactWithMatcher() = %v, want nil", got.Name)
+				}
+			} else {
+				if got == nil {
+					t.Errorf("FindArtifactWithMatcher() = nil, want %s", tt.wantName)
+				} else if got.Name != tt.wantName {
+					t.Errorf("FindArtifactWithMatcher() = %s, want %s", got.Name, tt.wantName)
+				}
+			}
+		})
+	}
+}
+
 func TestNewArtifactKey(t *testing.T) {
 	tests := []struct {
 		name      string
 		artName   string
-		scopeType string
+		scopeType lockfile.ScopeType
 		repoURL   string
 		repoPath  string
 		want      ArtifactKey
@@ -159,7 +270,7 @@ func TestNewArtifactKey(t *testing.T) {
 		{
 			name:      "global scope",
 			artName:   "test",
-			scopeType: "global",
+			scopeType: lockfile.ScopeGlobal,
 			repoURL:   "https://github.com/org/repo.git",
 			repoPath:  "/path",
 			want:      ArtifactKey{Name: "test", Repository: "", Path: ""},
@@ -167,7 +278,7 @@ func TestNewArtifactKey(t *testing.T) {
 		{
 			name:      "repo scope",
 			artName:   "test",
-			scopeType: "repo",
+			scopeType: lockfile.ScopeRepo,
 			repoURL:   "https://github.com/org/repo.git",
 			repoPath:  "/path",
 			want:      ArtifactKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: ""},
@@ -175,7 +286,7 @@ func TestNewArtifactKey(t *testing.T) {
 		{
 			name:      "path scope",
 			artName:   "test",
-			scopeType: "path",
+			scopeType: lockfile.ScopePath,
 			repoURL:   "https://github.com/org/repo.git",
 			repoPath:  "/path",
 			want:      ArtifactKey{Name: "test", Repository: "https://github.com/org/repo.git", Path: "/path"},

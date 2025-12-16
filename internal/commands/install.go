@@ -155,20 +155,20 @@ func runInstall(cmd *cobra.Command, args []string, hookMode bool, hookClientID s
 	if gitContext.IsRepo {
 		if gitContext.RelativePath == "." {
 			currentScope = &scope.Scope{
-				Type:     "repo",
+				Type:     scope.TypeRepo,
 				RepoURL:  gitContext.RepoURL,
 				RepoPath: "",
 			}
 		} else {
 			currentScope = &scope.Scope{
-				Type:     "path",
+				Type:     scope.TypePath,
 				RepoURL:  gitContext.RepoURL,
 				RepoPath: gitContext.RelativePath,
 			}
 		}
 	} else {
 		currentScope = &scope.Scope{
-			Type: "global",
+			Type: scope.TypeGlobal,
 		}
 	}
 
@@ -463,7 +463,7 @@ func determineArtifactsToInstall(tracker *artifacts.Tracker, sortedArtifacts []*
 
 	var artifactsToInstall []*lockfile.Artifact
 	for _, art := range sortedArtifacts {
-		key := artifacts.NewArtifactKey(art.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+		key := artifactKeyForInstall(art, currentScope)
 		if tracker.NeedsInstall(key, art.Version, targetClientIDs) {
 			// Check for version updates and log them
 			if existing := tracker.FindArtifact(key); existing != nil && existing.Version != art.Version {
@@ -474,6 +474,14 @@ func determineArtifactsToInstall(tracker *artifacts.Tracker, sortedArtifacts []*
 	}
 
 	return artifactsToInstall
+}
+
+// artifactKeyForInstall returns the correct artifact key based on whether the artifact is global or scoped
+func artifactKeyForInstall(art *lockfile.Artifact, currentScope *scope.Scope) artifacts.ArtifactKey {
+	if art.IsGlobal() {
+		return artifacts.NewArtifactKey(art.Name, scope.TypeGlobal, "", "")
+	}
+	return artifacts.NewArtifactKey(art.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
 }
 
 // cleanupRemovedArtifacts removes artifacts that are no longer in the lock file from all clients
@@ -553,50 +561,72 @@ func repairTracker(ctx context.Context, tracker *artifacts.Tracker, sortedArtifa
 	log := logger.Get()
 	out.println("Repair mode: verifying installed artifacts...")
 
-	installScope := buildInstallScope(currentScope, gitContext)
-
 	// Track which artifacts are missing for each client
 	var totalMissing int
+	var totalOutdated int
 
-	for _, client := range targetClients {
-		// Verify all artifacts for this client
-		results := client.VerifyArtifacts(ctx, sortedArtifacts, installScope)
+	// First, check for version mismatches in the tracker and remove outdated entries
+	for _, art := range sortedArtifacts {
+		key := artifactKeyForInstall(art, currentScope)
+		existing := tracker.FindArtifact(key)
+		if existing != nil && existing.Version != art.Version {
+			out.printf("  ↻ %s version mismatch (tracker: %s, lock file: %s)\n", art.Name, existing.Version, art.Version)
+			log.Info("artifact version mismatch", "name", art.Name, "tracker_version", existing.Version, "lock_version", art.Version)
+			// Remove from tracker so it will be reinstalled with correct version
+			tracker.RemoveArtifact(key)
+			totalOutdated++
+		}
+	}
 
-		// Update tracker based on verification results
-		for _, result := range results {
-			if !result.Installed {
-				out.printf("  ✗ %s not installed for %s: %s\n", result.Artifact.Name, client.DisplayName(), result.Message)
-				log.Info("artifact verification failed", "name", result.Artifact.Name, "client", client.ID(), "reason", result.Message)
+	// Verify each artifact at its proper install location (based on artifact's scope)
+	for _, art := range sortedArtifacts {
+		// Get the proper scope for this artifact
+		artScope := buildInstallScopeForArtifact(art, gitContext)
 
-				// Remove this client from the artifact's tracker entry
-				key := artifacts.NewArtifactKey(result.Artifact.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
-				existing := tracker.FindArtifact(key)
-				if existing != nil {
-					// Remove this client from the list
-					var updatedClients []string
-					for _, c := range existing.Clients {
-						if c != client.ID() {
-							updatedClients = append(updatedClients, c)
+		for _, client := range targetClients {
+			// Verify this single artifact at its proper location
+			results := client.VerifyArtifacts(ctx, []*lockfile.Artifact{art}, artScope)
+
+			for _, result := range results {
+				if !result.Installed {
+					out.printf("  ✗ %s not installed for %s: %s\n", result.Artifact.Name, client.DisplayName(), result.Message)
+					log.Info("artifact verification failed", "name", result.Artifact.Name, "client", client.ID(), "reason", result.Message)
+
+					// Remove this client from the artifact's tracker entry
+					key := artifactKeyForInstall(result.Artifact, currentScope)
+					existing := tracker.FindArtifact(key)
+					if existing != nil {
+						// Remove this client from the list
+						var updatedClients []string
+						for _, c := range existing.Clients {
+							if c != client.ID() {
+								updatedClients = append(updatedClients, c)
+							}
+						}
+
+						if len(updatedClients) == 0 {
+							// No clients left, remove entirely
+							tracker.RemoveArtifact(key)
+						} else {
+							existing.Clients = updatedClients
+							tracker.UpsertArtifact(*existing)
 						}
 					}
-
-					if len(updatedClients) == 0 {
-						// No clients left, remove entirely
-						tracker.RemoveArtifact(key)
-					} else {
-						existing.Clients = updatedClients
-						tracker.UpsertArtifact(*existing)
-					}
+					totalMissing++
 				}
-				totalMissing++
 			}
 		}
 	}
 
-	if totalMissing == 0 {
+	if totalMissing == 0 && totalOutdated == 0 {
 		out.println("  ✓ All artifacts verified")
 	} else {
-		out.printf("  Found %d missing artifacts that will be reinstalled\n", totalMissing)
+		if totalOutdated > 0 {
+			out.printf("  Found %d outdated artifacts that will be updated\n", totalOutdated)
+		}
+		if totalMissing > 0 {
+			out.printf("  Found %d missing artifacts that will be reinstalled\n", totalMissing)
+		}
 	}
 	out.println()
 }
@@ -605,30 +635,36 @@ func repairTracker(ctx context.Context, tracker *artifacts.Tracker, sortedArtifa
 func installArtifacts(ctx context.Context, successfulDownloads []*artifacts.ArtifactWithMetadata, gitContext *gitutil.GitContext, currentScope *scope.Scope, targetClients []clients.Client, out *outputHelper) *artifacts.InstallResult {
 	out.println("Installing artifacts...")
 
-	// Convert downloads to bundles
-	bundles := convertToArtifactBundles(successfulDownloads)
+	// Install each artifact to its proper scope
+	// Global artifacts go to ~/.claude, repo-scoped artifacts go to {repoRoot}/.claude
+	allResults := make(map[string]clients.InstallResponse)
 
-	// Determine installation scope
-	installScope := buildInstallScope(currentScope, gitContext)
+	for _, download := range successfulDownloads {
+		bundle := &clients.ArtifactBundle{
+			Artifact: download.Artifact,
+			Metadata: download.Metadata,
+			ZipData:  download.ZipData,
+		}
 
-	// Run installation across all clients
-	allResults := runMultiClientInstallation(ctx, bundles, installScope, targetClients)
+		// Determine installation scope based on the ARTIFACT's scope, not current directory
+		installScope := buildInstallScopeForArtifact(download.Artifact, gitContext)
+
+		// Run installation for this artifact
+		results := runMultiClientInstallation(ctx, []*clients.ArtifactBundle{bundle}, installScope, targetClients)
+
+		// Merge results
+		for clientID, resp := range results {
+			if existing, ok := allResults[clientID]; ok {
+				existing.Results = append(existing.Results, resp.Results...)
+				allResults[clientID] = existing
+			} else {
+				allResults[clientID] = resp
+			}
+		}
+	}
 
 	// Process and report results
 	return processInstallationResults(allResults, out)
-}
-
-// convertToArtifactBundles converts downloaded artifacts to client bundles
-func convertToArtifactBundles(downloads []*artifacts.ArtifactWithMetadata) []*clients.ArtifactBundle {
-	bundles := make([]*clients.ArtifactBundle, len(downloads))
-	for i, item := range downloads {
-		bundles[i] = &clients.ArtifactBundle{
-			Artifact: item.Artifact,
-			Metadata: item.Metadata,
-			ZipData:  item.ZipData,
-		}
-	}
-	return bundles
 }
 
 // buildInstallScope creates the installation scope from current context
@@ -643,6 +679,31 @@ func buildInstallScope(currentScope *scope.Scope, gitContext *gitutil.GitContext
 		installScope.RepoRoot = gitContext.RepoRoot
 	}
 
+	return installScope
+}
+
+// buildInstallScopeForArtifact creates the installation scope based on the artifact's own scope
+// Global artifacts go to ~/.claude, repo-scoped artifacts go to {repoRoot}/.claude
+func buildInstallScopeForArtifact(art *lockfile.Artifact, gitContext *gitutil.GitContext) *clients.InstallScope {
+	if art.IsGlobal() {
+		// Global artifact - install to ~/.claude
+		return &clients.InstallScope{
+			Type: clients.ScopeGlobal,
+		}
+	}
+
+	// Repo or path-scoped artifact - install to repo's .claude directory
+	installScope := &clients.InstallScope{
+		Type: clients.ScopeRepository,
+	}
+
+	if gitContext.IsRepo {
+		installScope.RepoRoot = gitContext.RepoRoot
+		installScope.RepoURL = gitContext.RepoURL
+	}
+
+	// For path-scoped artifacts, we'd need to handle the path too
+	// but for now we install to repo root
 	return installScope
 }
 
@@ -719,7 +780,7 @@ func ensureSkillsSupport(ctx context.Context, targetClients []clients.Client, sc
 // saveInstallationState saves the current installation state to tracker file
 func saveInstallationState(tracker *artifacts.Tracker, sortedArtifacts []*lockfile.Artifact, currentScope *scope.Scope, targetClientIDs []string, out *outputHelper) {
 	for _, art := range sortedArtifacts {
-		key := artifacts.NewArtifactKey(art.Name, currentScope.Type, currentScope.RepoURL, currentScope.RepoPath)
+		key := artifactKeyForInstall(art, currentScope)
 		tracker.UpsertArtifact(artifacts.InstalledArtifact{
 			Name:       art.Name,
 			Version:    art.Version,

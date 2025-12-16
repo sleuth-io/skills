@@ -8,6 +8,13 @@ import (
 	"github.com/sleuth-io/skills/internal/lockfile"
 )
 
+// Re-export scope type constants from lockfile for convenience
+const (
+	TypeGlobal = lockfile.ScopeGlobal
+	TypeRepo   = lockfile.ScopeRepo
+	TypePath   = lockfile.ScopePath
+)
+
 // Matcher matches artifacts based on scope
 type Matcher struct {
 	currentScope *Scope
@@ -15,9 +22,9 @@ type Matcher struct {
 
 // Scope represents the current working context
 type Scope struct {
-	Type     string // "global", "repo", or "path"
-	RepoURL  string // Repository URL (if in a repo)
-	RepoPath string // Path relative to repo root (if applicable)
+	Type     lockfile.ScopeType // TypeGlobal, TypeRepo, or TypePath
+	RepoURL  string             // Repository URL (if in a repo)
+	RepoPath string             // Path relative to repo root (if applicable)
 }
 
 // NewMatcher creates a new scope matcher
@@ -50,7 +57,7 @@ func (m *Matcher) MatchesArtifact(artifact *lockfile.Artifact) bool {
 // matchesRepository checks if a repository entry matches the current scope
 func (m *Matcher) matchesRepository(repo *lockfile.Repository) bool {
 	// If we're in global scope, repository-specific artifacts don't match
-	if m.currentScope.Type == "global" {
+	if m.currentScope.Type == TypeGlobal {
 		return false
 	}
 
@@ -85,8 +92,8 @@ func (m *Matcher) matchesRepoURL(artifactRepo string) bool {
 	}
 
 	// Normalize both URLs for comparison
-	currentNormalized := normalizeRepoURL(m.currentScope.RepoURL)
-	artifactNormalized := normalizeRepoURL(artifactRepo)
+	currentNormalized := NormalizeRepoURL(m.currentScope.RepoURL)
+	artifactNormalized := NormalizeRepoURL(artifactRepo)
 
 	return currentNormalized == artifactNormalized
 }
@@ -107,8 +114,13 @@ func (m *Matcher) matchesPath(artifactPath string) bool {
 	return strings.HasPrefix(currentPath, artifactPath) || currentPath == artifactPath
 }
 
-// normalizeRepoURL normalizes a repository URL for comparison
-func normalizeRepoURL(repoURL string) string {
+// MatchRepoURLs checks if two repository URLs refer to the same repository
+func MatchRepoURLs(url1, url2 string) bool {
+	return NormalizeRepoURL(url1) == NormalizeRepoURL(url2)
+}
+
+// NormalizeRepoURL normalizes a repository URL for comparison
+func NormalizeRepoURL(repoURL string) string {
 	// Normalize and clean the URL
 	cleaned := strings.TrimSpace(strings.ToLower(repoURL))
 	cleaned = strings.TrimSuffix(cleaned, ".git")

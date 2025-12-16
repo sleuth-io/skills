@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sleuth-io/skills/internal/cache"
+	"github.com/sleuth-io/skills/internal/lockfile"
 	"github.com/sleuth-io/skills/internal/utils"
 )
 
@@ -37,12 +39,12 @@ type ArtifactKey struct {
 }
 
 // NewArtifactKey creates a key from name and scope
-func NewArtifactKey(name string, scopeType, repoURL, repoPath string) ArtifactKey {
+func NewArtifactKey(name string, scopeType lockfile.ScopeType, repoURL, repoPath string) ArtifactKey {
 	key := ArtifactKey{Name: name}
-	if scopeType == "repo" || scopeType == "path" {
+	if scopeType == lockfile.ScopeRepo || scopeType == lockfile.ScopePath {
 		key.Repository = repoURL
 	}
-	if scopeType == "path" {
+	if scopeType == lockfile.ScopePath {
 		key.Path = repoPath
 	}
 	return key
@@ -145,6 +147,30 @@ func (t *Tracker) FindArtifact(key ArtifactKey) *InstalledArtifact {
 	return nil
 }
 
+// FindArtifactWithMatcher finds an artifact by name using a custom repo URL matcher function
+// This is useful when the tracker URL format may differ from the search URL (e.g., SSH vs HTTPS)
+func (t *Tracker) FindArtifactWithMatcher(name, repoURL, path string, matchRepo func(a, b string) bool) *InstalledArtifact {
+	for i := range t.Artifacts {
+		a := &t.Artifacts[i]
+		if a.Name != name {
+			continue
+		}
+		// Check if repo matches (using provided matcher for URL normalization)
+		if a.Repository == "" && repoURL == "" {
+			// Both global
+			if a.Path == path {
+				return a
+			}
+		} else if a.Repository != "" && repoURL != "" && matchRepo(a.Repository, repoURL) {
+			// Both repo-scoped and repos match
+			if a.Path == path {
+				return a
+			}
+		}
+	}
+	return nil
+}
+
 // FindByScope returns all artifacts matching a specific scope
 func (t *Tracker) FindByScope(repository, path string) []InstalledArtifact {
 	var result []InstalledArtifact
@@ -159,6 +185,34 @@ func (t *Tracker) FindByScope(repository, path string) []InstalledArtifact {
 // FindGlobal returns all globally-scoped artifacts
 func (t *Tracker) FindGlobal() []InstalledArtifact {
 	return t.FindByScope("", "")
+}
+
+// FindForScope returns artifacts relevant to a given scope:
+// - All global artifacts
+// - Artifacts matching the repo (with URL normalization)
+// - For path scopes, artifacts whose path contains or equals the current path
+func (t *Tracker) FindForScope(repoURL, repoPath string, matchRepo func(a, b string) bool) []InstalledArtifact {
+	var result []InstalledArtifact
+	for _, a := range t.Artifacts {
+		// Include global artifacts
+		if a.IsGlobal() {
+			result = append(result, a)
+			continue
+		}
+		// Check repo match using provided matcher
+		if a.Repository != "" && matchRepo(a.Repository, repoURL) {
+			// If artifact has no path restriction, include it
+			if a.Path == "" {
+				result = append(result, a)
+				continue
+			}
+			// If artifact has path, check if current path is within it
+			if repoPath != "" && (strings.HasPrefix(repoPath, a.Path) || repoPath == a.Path) {
+				result = append(result, a)
+			}
+		}
+	}
+	return result
 }
 
 // UpsertArtifact adds or updates an artifact in the tracker

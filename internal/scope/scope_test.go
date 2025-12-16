@@ -17,7 +17,7 @@ func TestMatchesArtifact(t *testing.T) {
 		{
 			name: "global artifact always matches",
 			scope: &Scope{
-				Type: "global",
+				Type: TypeGlobal,
 			},
 			artifact: &lockfile.Artifact{
 				Name:         "test",
@@ -28,7 +28,7 @@ func TestMatchesArtifact(t *testing.T) {
 		{
 			name: "repo artifact matches when in same repo",
 			scope: &Scope{
-				Type:    "repo",
+				Type:    TypeRepo,
 				RepoURL: "https://github.com/test/repo",
 			},
 			artifact: &lockfile.Artifact{
@@ -42,7 +42,7 @@ func TestMatchesArtifact(t *testing.T) {
 		{
 			name: "repo artifact doesn't match from global scope",
 			scope: &Scope{
-				Type: "global",
+				Type: TypeGlobal,
 			},
 			artifact: &lockfile.Artifact{
 				Name: "test",
@@ -55,7 +55,7 @@ func TestMatchesArtifact(t *testing.T) {
 		{
 			name: "path artifact matches when in matching path",
 			scope: &Scope{
-				Type:     "path",
+				Type:     TypePath,
 				RepoURL:  "https://github.com/test/repo",
 				RepoPath: "src/components",
 			},
@@ -70,7 +70,7 @@ func TestMatchesArtifact(t *testing.T) {
 		{
 			name: "path artifact doesn't match when in different path",
 			scope: &Scope{
-				Type:     "path",
+				Type:     TypePath,
 				RepoURL:  "https://github.com/test/repo",
 				RepoPath: "src/utils",
 			},
@@ -111,7 +111,7 @@ func TestGetInstallLocations(t *testing.T) {
 				Repositories: []lockfile.Repository{},
 			},
 			scope: &Scope{
-				Type: "global",
+				Type: TypeGlobal,
 			},
 			wantPaths: []string{globalBase},
 		},
@@ -124,7 +124,7 @@ func TestGetInstallLocations(t *testing.T) {
 				},
 			},
 			scope: &Scope{
-				Type:    "repo",
+				Type:    TypeRepo,
 				RepoURL: "https://github.com/test/repo",
 			},
 			wantPaths: []string{filepath.Join(repoRoot, ".claude")},
@@ -138,7 +138,7 @@ func TestGetInstallLocations(t *testing.T) {
 				},
 			},
 			scope: &Scope{
-				Type:     "path",
+				Type:     TypePath,
 				RepoURL:  "https://github.com/test/repo",
 				RepoPath: "src/components",
 			},
@@ -153,7 +153,7 @@ func TestGetInstallLocations(t *testing.T) {
 				},
 			},
 			scope: &Scope{
-				Type:     "path",
+				Type:     TypePath,
 				RepoURL:  "https://github.com/test/repo",
 				RepoPath: "src/components",
 			},
